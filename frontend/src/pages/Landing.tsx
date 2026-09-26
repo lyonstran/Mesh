@@ -58,7 +58,8 @@ function ExampleMatch() {
 export default function Landing() {
   return (
     <main>
-      <section className="mx-auto grid max-w-5xl gap-10 px-4 pt-12 pb-16 lg:grid-cols-[1.1fr_1fr] lg:items-center lg:pt-20">
+      {/* Fills the screen below the navbar (h-16 + 1px border) so the next section starts below the fold. */}
+      <section className="mx-auto grid min-h-[calc(100svh-4rem-1px)] max-w-5xl content-center gap-10 px-4 py-12 lg:grid-cols-[1.1fr_1fr] lg:items-center">
         <div>
           <h1 className="text-[2.5rem] leading-[1.08] font-extrabold sm:text-6xl">Help from the neighbors around you, after the storm.</h1>
           <p className="mt-5 max-w-prose text-lg text-ink-soft">

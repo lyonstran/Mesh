@@ -18,7 +18,7 @@ export default function PublicLayout() {
   return (
     <div className="flex min-h-screen flex-col">
       <header className="sticky top-0 z-20 border-b border-line bg-ground/95 backdrop-blur">
-        <nav aria-label="Main" className="mx-auto flex max-w-5xl items-center gap-2 px-4 py-3">
+        <nav aria-label="Main" className="mx-auto flex h-16 max-w-5xl items-center gap-2 px-4">
           <Link to="/" className="mr-auto text-2xl font-extrabold tracking-tight" onClick={() => setMenuOpen(false)}>
             Mesh
           </Link>
