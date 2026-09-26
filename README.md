@@ -1,6 +1,6 @@
 # Mesh
 
-Mobile-first weather-disaster relief for Georgia: neighbors helping neighbors, with AI triage and live hazard data. Built at HackGT 13. It needs an internet connection; "mesh" means a human network of neighbors, not offline networking.
+Mobile-first weather-disaster relief for Georgia: neighbors helping neighbors. The current MVP matches requests to volunteers by vector similarity and opens a private chat (PLAN.md §0.1). Built at HackGT 13. It needs an internet connection; "mesh" means a human network of neighbors, not offline networking.
 
 Full spec: [PLAN.md](PLAN.md). Contributor rules: [CLAUDE.md](CLAUDE.md).
 
@@ -13,6 +13,7 @@ cp .env.example .env          # fill in MONGODB_URI at minimum
 cd backend
 python -m venv .venv && . .venv/Scripts/activate   # macOS/Linux: . .venv/bin/activate
 pip install -r requirements-dev.txt
+python -m app.seed --reset       # demo users (set DEMO_LOGIN=true and VITE_DEMO_LOGIN=true to sign in as them)
 uvicorn app.main:app --reload --port 8000
 
 # frontend: http://localhost:5173 (proxies /api and /ws to :8000)

@@ -1,6 +1,6 @@
 # Onboarding: Mesh (HackGT 13)
 
-Welcome. This file covers getting set up (about 20 minutes) and who owns what for the rest of the hackathon. **[PLAN.md](PLAN.md) is the spec** and CLAUDE.md holds the rules. Skim both before writing code.
+Welcome. This file covers getting set up (about 20 minutes), trying the MVP, and who owns what next. **[PLAN.md](PLAN.md) is the spec** (start with **§0.1, the MVP**) and CLAUDE.md holds the rules. Skim both before writing code.
 
 ---
 
@@ -8,7 +8,7 @@ Welcome. This file covers getting set up (about 20 minutes) and who owns what fo
 
 ### 1. Access (ask Chris)
 - [ ] Collaborator access to `github.com/lyonstran/Mesh`
-- [ ] Added as a **test user** on the Google OAuth consent screen (login won't work without this)
+- [ ] Added as a **test user** on the Google OAuth consent screen (Google login won't work without this; demo login works regardless)
 - [ ] The team `.env` values, sent over DM. **Never commit `.env`, and never paste it in a public channel.**
 - [ ] Your IP allowed in MongoDB Atlas → Network Access. Venue Wi-Fi IPs change, so for the hackathon we may allow `0.0.0.0/0` with a strong DB password and remove it after the event.
 
@@ -24,7 +24,10 @@ git clone https://github.com/lyonstran/Mesh.git
 cd Mesh
 cp .env.example .env        # paste in the values Chris sends you
 ```
-In your `.env`, set **`MONGODB_DB=mesh_<yourname>`** (e.g. `mesh_alex`). Each of us gets a private dev database, so `python -m app.seed --reset` never wipes a teammate's data. The shared `mesh` database is for integration and the demo.
+In your `.env`:
+- Set **`MONGODB_DB=mesh_<yourname>`** (e.g. `mesh_alex`). Each of us gets a private dev database, so `python -m app.seed --reset` never wipes a teammate's data. The shared `mesh` database is for integration and the demo.
+- Set **`DEMO_LOGIN=true`** and **`VITE_DEMO_LOGIN=true`** for local work, so you can sign in as seeded demo users.
+- Set **`JWT_SECRET`** to any long random string, or sessions reset every time the backend restarts.
 
 ### 4. Run the backend (terminal 1)
 ```bash
@@ -33,6 +36,7 @@ python -m venv .venv
 . .venv/Scripts/activate          # Windows (Git Bash)
 # source .venv/bin/activate       # macOS / Linux
 pip install -r requirements-dev.txt
+python -m app.seed --reset        # demo volunteers + requesters (first run downloads the ~90 MB embedding model)
 uvicorn app.main:app --reload --port 8000
 ```
 
@@ -44,104 +48,100 @@ npm run dev                       # http://localhost:5173
 ```
 
 ### 6. Verify
-- [ ] http://localhost:5173 shows **Database: ok**
-- [ ] `cd backend && pytest -q` passes
-- [ ] `cd frontend && npm run typecheck && npm run lint` passes
+- [ ] http://localhost:5173/api/health shows `"db": "ok"`. It also shows `vector_search`: `atlas` on our Atlas cluster, `local` otherwise.
+- [ ] `cd backend && pytest -q` passes. To also run the 12 database tests, set `MONGODB_TEST_URI` to a MongoDB URI (Atlas is fine); they create and drop their own `mesh_test_*` databases.
+- [ ] `cd frontend && npm run typecheck && npm run lint` passes.
 
 If the database shows `error`, the usual cause is that your IP isn't allowed in Atlas or `MONGODB_URI` is wrong. The backend log shows the exact error.
 
-### 7. Personal tasks
+### 7. Try the MVP (10 minutes)
+Use two browser windows (one normal, one private) so you can be both sides at once:
+- [ ] **Volunteer:** sign in as **Marcus (demo)** → "Requests that fit you" lists the tree and debris requests first.
+- [ ] **Requester:** sign in as **Casey (demo)** → type "my neighbor is trapped" → the red 911 screen appears → "Go back and edit" → ask for something normal, like "a branch fell on my porch roof".
+- [ ] **Volunteer:** Casey's request shows up (within 10 s) → "Help with this" → chat opens.
+- [ ] **Chat:** send messages both ways (they appear within 3 s) → "Mark as resolved".
+- [ ] Anything broken or confusing: post it in the team chat with steps to reproduce.
+
+### 8. Personal tasks
 - [ ] Redeem your **$50 Muse credits** (PLAN.md §20)
-- [ ] Read PLAN.md §14 (the non-negotiable rules) and your lane below
+- [ ] Read PLAN.md §0.1 (MVP), §14 (the non-negotiable rules), §21 (backlog), and your lane below
 
 ### Working with Claude Code
 CLAUDE.md loads automatically. Start each task with something like:
 
-> Read PLAN.md and ONBOARDING.md. I'm Lane B. Do task B2. Stay inside my lane's files; if you need to change a shared file, keep the change minimal and tell me.
+> Read PLAN.md and ONBOARDING.md. I'm Lane B. Do task B1. Stay inside my lane's files; if you need to change a shared file, keep the change minimal and tell me.
 
 Claude Code will leave `TODO(HUMAN)` markers where it needs keys, docs, or data. Don't let it guess API specs (rule §14.1).
 
 ---
 
-## Part 2: How we split the work
+## Part 2: The plan from here
 
-Four lanes, split by **file ownership** so we rarely edit the same files. Lanes own full-stack slices where that makes sense: Lane A owns realtime on both ends, and Lane D builds the hazard and coordinator UI on top of its own data. That keeps Lane C's frontend load manageable.
+### Phase 0: the MVP (done, on `main`)
+The first working prototype is on `main` (PLAN.md §0.1). It covers:
+- Google + demo login and onboarding;
+- requests with the 911 keyword check;
+- volunteer lists **ranked purely by vector similarity**: fastembed `all-MiniLM-L6-v2` vectors, with Atlas Vector Search or a local fallback, and optional Muse Spark text normalization;
+- claiming, and a private chat per request (polling).
+
+There's no location, map, hazards, or triage yet; those are Phase 1+.
+
+**Everyone, before Phase 1:**
+1. `git fetch origin && git switch lane/<your-lane> && git pull origin main` (lane branches were created before the MVP).
+2. Do the Part 1 checklist, including "Try the MVP".
+3. Finish your human tasks in the table below.
+
+### Phase 1: build on the MVP
+Same four lanes and branches. Each lane's tasks are **in order**: finish and merge one before starting the next.
 
 | Lane | Focus | Suggested owner |
 |---|---|---|
-| **A: Platform** | auth and onboarding API, seed data, voice services, realtime (backend + frontend), deploy, coordinator API | Chris (holds the keys, Atlas, and Vultr) |
-| **B: Requests core** | data models, state machine, fuzzing, priority, privacy serializer, request endpoints, matching, chat | Teammate 1 |
-| **C: Requester & helper UI** | routing, login, onboarding, requester and helper pages, voice recording and playback UI, 911 screen | Teammate 2 |
-| **D: Hazards, AI & data** | tract data, triage rules, hazards and sim mode, AI layer, hazard banner, coordinator dashboard UI | Teammate 3 |
+| **A: Platform** | deploy, realtime, coordinator role, offer delivery | Chris (holds the keys, Atlas, and Vultr) |
+| **B: Requests core** | request lifecycle, triage rules, verified-helper rules, matching filters | Teammate 1 |
+| **C: UI** | profile page, polish, matching v2 UI, leads queue, map (later) | Teammate 2 |
+| **D: AI & data** | Muse Spark, AI matching v2, matching eval, synthetic leads | Teammate 3 |
 
-### Interfaces between lanes (agree on these early)
-- **B → everyone:** `models.py` + `frontend/src/lib/types.ts`, first version merged by **~4:15 PM**.
-- **D → B:** `services/triage.py` exposes a rules-only triage by M2 and the full LLM merge by M3. B's create and preview endpoints call it; D owns what's inside.
-- **D → B:** `tract_for_point(lon, lat)` and `get_hazards(lat, lon)` for the request create pipeline (PLAN.md §9.3).
-- **A → C:** `deps.py` guards and the `/api/me` shape by M1; `RealtimeProvider` by M4. C's pages consume them.
-- **D → C:** `HazardBanner` and `SimulatedBadge` components, which C drops into the `/r` and `/h` pages.
+**Lane A: Platform** (`lane/a-platform`)
+1. **A1 Deploy:** Vultr VM, Docker Compose, Caddy, .tech DNS, HTTPS (PLAN.md §16). Pre-download the embedding model in the Docker image, set `COOKIE_SECURE=true`, and add the production origin to the OAuth client. Then run the phone smoke test over cellular.
+2. **A2 Realtime:** `/ws` for chat messages and request status (PLAN.md §10), keeping polling as a fallback. Every payload goes through `serialize_request`.
+3. **A3 Coordinator role:** invite-code onboarding, `POST /api/coordinator/verify/{user_id}`. Lanes B and D need verified helpers and a coordinator view.
+4. **A4 Match offers:** `match.suggested` WebSocket event with accept/decline, plus the 5-minute timeout that offers to the next candidate (PLAN.md §21.1 step 6), using D's ranked candidates.
 
-### Task list by milestone
+**Lane B: Requests core** (`lane/b-requests`)
+1. **B1 Lifecycle:** add `EN_ROUTE`, `ON_SITE`, `ESCALATED` to the state machine and endpoints (PLAN.md §9.7), with tests for every transition.
+2. **B2 Triage rules:** high-urgency terms and flags in `rules.py` plus the `requester_flags` floor (PLAN.md §9.2 step 1), giving each request a category and urgency. D adds the LLM merge on top.
+3. **B3 Helper rules:** verified-only claims when urgency ≥ 4, and at most 2 active claims per helper.
+4. **B4 Matching v2 filters:** hard filters (on duty, radius once location exists, fewer than 2 active claims, verified if urgency ≥ 4), the fairness penalty, and the deterministic fallback score (PLAN.md §21.1 steps 1, 4, 5). Expose these as one function D's reranker calls.
+5. **B5 Lead conversion:** the confirmed-lead → request path and the verified-only rule for social-sourced requests (PLAN.md §21.2), once D's leads land.
 
-Deadlines from PLAN.md §18 (Saturday → Sunday). Each milestone ends with a **10-minute all-hands integration check** (see "Sync points" below).
+**Lane C: UI** (`lane/c-ui`)
+1. **C1 Profile page:** edit name, background, skills, and "What can you offer?" (`PATCH /api/me` already exists and re-embeds the profile), switch roles, and sign out.
+2. **C2 Polish:** fix issues from everyone's MVP testing; add a status timeline on the requester page.
+3. **C3 Matching v2 UI:** need-coverage checklist per matched helper, the "Matched by AI" reason, and the accept/decline prompt for suggested matches (with A4 and D2).
+4. **C4 Leads queue:** coordinator page with label, confidence, reasons, bucket, a SYNTHETIC badge on every lead, and confirm/dismiss (with D4).
+5. **C5 Location + map:** only once location returns to scope (PLAN.md §13).
 
-#### M1: due Sat 5 PM (auth, onboarding, tract data)
-| Lane | Tasks | Main files |
-|---|---|---|
-| A | **A1** Google auth, JWT cookie, `/api/me`, logout, demo login behind `DEMO_LOGIN` (404 when off) · **A2** onboarding + `PATCH /api/me` + duty toggle + invite code check · tests | `routers/auth.py`, `routers/users.py`, `security.py`, `deps.py` |
-| B | **B1 (first 30 min, then open a PR right away)** `models.py` enums and pydantic models + matching `types.ts` · **B2** pure logic with tests: `state.py`, `fuzz.py`, `priority.py`, `serialize.py` (every viewer row) | `models.py`, `services/{state,fuzz,priority,serialize}.py` |
-| C | **C1** router, `AuthGuard`/`RoleGuard`, 401 → `/login` in the fetch wrapper · **C2** Login page (Google button + demo dropdown), Onboarding page (role cards, profile, map pin, role fields, flags privacy note) · Leaflet `MapView` base | `frontend/src/{auth,pages,components}` |
-| D | **D1** `data/prepare_tracts.py` + `load_tracts.py` + `tract_for_point` · **D2** `rules.py` (EN + ES emergency/high keyword lists, flag detection, rule floor) with tests | `data/`, `services/{rules,geocode}.py` |
+**Lane D: AI & data** (`lane/d-hazards-ai`)
+1. **D1 Muse Spark live:** set `LLM_PROVIDER=muse` + `MUSE_API_KEY`. Check whether normalization improves ranking (a good test: with the demo data and mock mode, Diego's #2 is the tree request because it mentions a car; see if it becomes the water/food request), and tune `ai/prompts.py`.
+2. **D2 AI matching v2:** top ~10 by vector search, then a Spark rerank returning structured JSON (need coverage, reason, optional 2-helper team), then code validation with fallback to B4's score (PLAN.md §21.1 steps 2–4). The LLM never outputs scores or distances.
+3. **D3 Matching eval:** `backend/eval/matching_eval.py`, ~30 synthetic requests and ~15 helpers, a best-helper labels file (`TODO(HUMAN)`: the team labels it). Reports top-1/top-3 agreement for formula vs embeddings vs embeddings + LLM.
+4. **D4 Synthetic leads:** `SourceAdapter` + `SyntheticSource`, the classifier with the keyword baseline, near-duplicate detection, the `social_posts.jsonl` dataset with a held-out split, and the eval script (PLAN.md §21.2).
 
-**Done when:** login → onboarding → role home works, and `tract_for_point` returns the venue tract.
+**If we fall behind**, cut in this order: coordinator weight sliders and chat translation (neither is built yet), then the leads queue polish, then match offers (keep the ranked list). **Never cut:** auth, the request lifecycle, AI matching, the 911 path, or the privacy serializer.
 
-#### M2: due Sat 7 PM (Checkpoint 1: core loop with polling)
-| Lane | Tasks |
-|---|---|
-| A | **A3** `/api/geocode` (Census geocoder) · coordinator `POST /verify/{user_id}` · help B test the claim flow across two logged-in users |
-| B | **B3** `routers/requests.py`: create (rules-only triage) → tract → hazards → fuzz → priority → insert; `/mine`, `/feed` (`$geoNear`, priority recomputed), `/{id}`, claim (atomic, verified rule, max 2), status/release/cancel/escalate · claim-race test |
-| C | **C3** requester `/r` + `/r/new` (text only for now), helper `/h` (map + ranked list + on-duty toggle) + `/h/req/:id` (claim, status buttons, Google Maps link), 5 s polling, `StatusTimeline` |
-| D | **D3** `services/hazards.py` (NWS + Open-Meteo + AQ, cache, partial failures), `hazard_thresholds.yaml`, `/api/hazards`, fixture tests · **D4** sim mode + `atl_storm_smoke.json` (labeled SIMULATED) · `HazardBanner` + `SimulatedBadge` components |
-
-**Done when:** a request goes to the helper feed, gets claimed, and the requester sees the status change.
-
-#### M3: due Sat 11 PM (Checkpoint 2: full demo path, local)
-| Lane | Tasks |
-|---|---|
-| A | **A4** `seed.py` (8 helpers, 12 requests incl. a Spanish medical-device one, 1 coordinator, 4 fake `demo: true` resources, `--keepalive`) · **A5** voice backend: `services/tts.py` (ElevenLabs + disk cache), `services/transcribe.py` (Muse, 503 fallback), `routers/voice.py` |
-| B | **B4** `matching.py` + `/matches` (scoring, category → skills/resources, language match), using D's match-reason function with template fallback · `resources` endpoint for the nearby list |
-| C | **C4** `EmergencyInterstitial` (tel:911), triage preview card (editable category), `PriorityBreakdown` ("designed defaults, not fitted") · **C5** `VoiceRecorder`, `useAudioPlayer` ("Tap to hear"), Web Speech fallback, confirmation audio |
-| D | **D5** `ai/` provider protocol, `MockProvider`, `MuseProvider` (from `docs/muse-api.md` only), JSON retry → `TriageFallback` · **D6** triage LLM merge (can't lower urgency), `/preview` wiring with B, `show_911`, safety notes (+ fixed lines), `confirmation_text`, match-reason prompt |
-
-#### M4: due Sun 1 AM (realtime + deploy)
-| Lane | Tasks |
-|---|---|
-| A | **A6** `/ws` + `ConnectionManager` + presence upserts + change-stream broadcaster (always serialized per recipient) · `RealtimeProvider` + `useGeolocationStream` on the frontend · **A7** Vultr VM, Docker Compose, Caddy, .tech DNS, HTTPS, prod OAuth origin |
-| B | **B5** messages endpoints + translation on send · audit every REST/WS path for `serialize_request` · fill test gaps (PLAN.md §17) |
-| C | **C6** live helper/requester dots on maps, `ChatPanel` (original + translated), spoken status updates for the requester |
-| D | **D7** `translate()` for chat and TTS (skip when the language already matches) · triage prompt tuning with real Muse · `/api/hazards/region` for coordinators |
-
-**Done when:** it works on phones over HTTPS (cellular smoke test, PLAN.md §16.6).
-
-#### M5: due Sun 5 AM (coordinator + polish)
-| Lane | Tasks |
-|---|---|
-| A | **A8** `/api/coordinator/stats` (aggregation), weights GET/PUT (normalize), `/api/tracts?bbox` |
-| B | **B6** end-to-end test pass (PLAN.md §17 manual checklist) and bug fixing across the request lifecycle |
-| C | **C7** `/settings` page · 375 px polish pass across all requester and helper pages |
-| D | **D8** coordinator AI summary (numbers from stats only, 60 s cache) · `/c` dashboard: EJI choropleth, markers, alerts, stats cards, summary, weight sliders, sim toggle + scenario picker |
-
-**Freeze 6 AM:** bug fixes only. **Submit by 8:30 AM:** Chris records the Meta video; each lane writes the Devpost sections for the sponsor tech it built (A: Vultr, MongoDB, .tech, ElevenLabs; B: privacy and matching design; C: UX and the voice experience; D: Muse Spark, Muse Voice, hazard data).
-
-If we fall behind, cut in PLAN.md §18 order: weight sliders → chat translation → change streams → coordinator dashboard. **Never cut:** auth, the request lifecycle, the hazard banner, AI triage, the 911 path, the privacy serializer, or sim mode.
+### Interfaces between lanes
+- **B → D:** B4's filter + fallback-score function, which D2's reranker calls.
+- **D → A and C:** D2's ranked candidates with coverage, which A4 delivers as offers and C3 displays.
+- **D → B and C:** D4's lead records, which B5 converts and C4 displays.
+- **A → B and D:** A3's verified flag and coordinator role.
 
 ### Human (non-code) tasks by owner
 | Owner | Task |
 |---|---|
-| A | Atlas cluster + user + IP allowlist, Google OAuth client + test users, .tech domain, Vultr VM, ElevenLabs key + multilingual voice ID, NWS User-Agent email, coordinator invite code, confirm the real deadline |
-| B | Write `docs/demo-script.md` from the PLAN.md §17 checklist |
-| C | Line up two phones (one iOS, one Android) for the M4 cellular smoke test |
-| D | Download EJI 2024 CSV + GA TIGER tracts into `data/raw/`, fix `data/eji_columns.yaml` from the data dictionary, paste Muse docs into `docs/muse-api.md` |
+| A | Google OAuth client ID + test users (`GOOGLE_CLIENT_ID`, `VITE_GOOGLE_CLIENT_ID`); Atlas URI, confirm `/api/health` shows `vector_search: atlas` against it; .tech domain; Vultr VM; confirm the real deadline |
+| B | Write `docs/demo-script.md` from the "Try the MVP" steps plus PLAN.md §17 |
+| C | Line up two phones (one iOS, one Android) for the A1 smoke test |
+| D | `MUSE_API_KEY`; confirm the transcription endpoint (`docs/muse-api.md` lists two conflicting paths); label the D3 best-helper file with the team |
 
 ---
 
@@ -154,32 +154,33 @@ If we fall behind, cut in PLAN.md §18 order: weight sliders → chat translatio
   |---|---|
   | A: Platform | `lane/a-platform` |
   | B: Requests core | `lane/b-requests` |
-  | C: Requester & helper UI | `lane/c-ui` |
-  | D: Hazards, AI & data | `lane/d-hazards-ai` |
+  | C: UI | `lane/c-ui` |
+  | D: AI & data | `lane/d-hazards-ai` |
 
   ```bash
   git fetch origin
   git switch lane/b-requests        # your lane's branch
+  git pull origin main              # bring in the latest main
   ```
 - Commit to your lane branch and push often. Never push directly to `main`.
-- **Merge into `main` via PR whenever a task works**, and at the latest at every sync point. Before merging: `pytest -q` and `npm run typecheck` pass, and one teammate glances at it (a 2-minute review is fine). Lane B's `models.py` PR (B1) should merge as soon as it's ready, since everyone builds on it.
+- **Merge into `main` via PR whenever a task works**, and at the latest at every sync point. Before merging: `pytest -q` and `npm run typecheck` pass, and one teammate glances at it (a 2-minute review is fine).
 - After anything merges to `main`, update your lane branch: `git pull origin main` (or `git rebase origin/main` if you prefer). Lane branches that drift from `main` for hours cause painful merges.
 
 ### Shared files (where conflicts happen)
 | File | Rule |
 |---|---|
-| `backend/app/models.py` + `frontend/src/lib/types.ts` | Lane B lands the first version by ~4:15 PM. After that anyone may add to them, but change **both files in the same PR**. |
-| `backend/app/services/triage.py` | Lane D owns it. Lane B calls it and doesn't edit it; ask D for changes. |
+| `backend/app/models.py` + `frontend/src/lib/types.ts` | Anyone may add to them, but change **both files in the same PR**. |
+| `backend/app/services/serialize.py` | Lane B owns it. Every request leaving the backend goes through it; ask B before changing what a viewer sees. |
+| `backend/app/services/{embeddings,ranking}.py`, `backend/app/ai/` | Lane D owns them. |
 | `backend/app/main.py` | Only add your `include_router` line. |
-| `frontend/src/router.tsx` | Lane C owns it. Lane D adds only the `/c` route. |
+| `frontend/src/router.tsx` | Lane C owns it. Other lanes add only their own routes. |
 | `requirements.txt` / `package.json` | Add dependencies in your PR. After a rebase, re-run `npm install` so the lockfile is regenerated rather than hand-merged. |
 | `.env.example` | Add every new variable here (without a value) and tell the team. |
 
 ### Not blocking each other
-- **The API contract is PLAN.md.** Frontend work (C, and D's dashboard) builds against the shapes in PLAN.md §6–§11 using hardcoded sample data, then swaps in the real endpoint when it merges.
-- Lanes B and D write logic in `services/` as pure functions with tests, so that work doesn't need auth or the frontend to be done.
-- Until D's triage lands, B can stub it with a function that returns urgency 1 and category `other`.
+- **The API contract is PLAN.md.** Frontend work builds against the shapes in PLAN.md using hardcoded sample data, then swaps in the real endpoint when it merges.
+- Backend logic in `services/` is pure functions with tests where possible, so it doesn't wait on the frontend.
 - If you're blocked for more than 15 minutes, say so in the team chat.
 
 ### Sync points
-At **5 PM, 7 PM, 11 PM, 1 AM, and 5 AM**, spend 10 minutes together: merge everything to `main`, run the milestone's "done when" check on one machine, and re-split anything that's behind.
+Every ~2 hours (agree on times in the team chat, starting when everyone finishes Phase 0), spend 10 minutes together: merge everything to `main`, run "Try the MVP" plus whatever landed on one machine, and re-split anything that's behind.
