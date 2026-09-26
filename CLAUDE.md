@@ -31,10 +31,13 @@ Priority combines AI triage, live hazards (NWS + Open-Meteo), and CDC EJI tract 
 ## Commands
 
 ```bash
+# .env lives at the repo root (copy .env.example); backend and Vite both read it from there.
+
 # backend (from backend/)
-pip install -r requirements.txt
+pip install -r requirements-dev.txt    # runtime deps + pytest (Docker image uses requirements.txt)
 uvicorn app.main:app --reload --port 8000
 pytest -q
+curl localhost:8000/api/health          # {"ok":true,"db":"ok",...} once MONGODB_URI works
 python -m app.seed --reset            # demo data (add --keepalive during demos)
 
 # data (from data/)

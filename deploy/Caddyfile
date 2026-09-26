@@ -1,0 +1,15 @@
+# TODO(HUMAN): replace <domain> with the registered .tech domain (PLAN.md §16).
+<domain>.tech {
+	encode gzip
+	handle /api/* {
+		reverse_proxy backend:8000
+	}
+	handle /ws {
+		reverse_proxy backend:8000
+	}
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}

@@ -1,0 +1,9 @@
+# Maps Mesh field names to CDC/ATSDR EJI 2024 CSV column names (PLAN.md §4).
+# TODO(HUMAN): these are PLACEHOLDERS. Open the EJI data dictionary and correct every value.
+# Do not assume any of these are right.
+geoid: GEOID           # 11-digit tract FIPS as string
+eji_rank: RPL_EJI      # overall EJI percentile rank 0-1
+climate_rank: null     # EJI + Climate Burden rank column (fill in from dictionary)
+env_rank: null         # environmental burden module
+svm_rank: null         # social vulnerability module
+hvm_rank: null         # health vulnerability module
