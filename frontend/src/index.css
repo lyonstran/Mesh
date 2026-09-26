@@ -1,1 +1,42 @@
 @import "tailwindcss";
+
+/* Storm-night ink, a cool ground, and one warm "porch light" accent.
+   Red is reserved for the 911 screen and destructive actions. */
+@theme {
+  --font-sans: "Atkinson Hyperlegible Next", ui-sans-serif, system-ui, sans-serif;
+
+  --color-ink: #1e2a47;
+  --color-ink-soft: #4a5670;
+  --color-ground: #edf1f6;
+  --color-surface: #ffffff;
+  --color-line: #cfd7e3;
+  --color-porch: #f0b429;
+  --color-porch-soft: #fdf3d8;
+  --color-alert: #b42318;
+  --color-ok: #1d7a4f;
+}
+
+@layer base {
+  html {
+    font-size: 17px;
+  }
+
+  body {
+    @apply bg-ground font-sans text-ink antialiased;
+    line-height: 1.5;
+  }
+
+  :focus-visible {
+    outline: 3px solid var(--color-porch);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+    }
+  }
+}
