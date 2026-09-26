@@ -1,5 +1,6 @@
 import { Link, Outlet } from 'react-router-dom'
 import { useLogout, useMe } from '../api/hooks'
+import { homeFor } from '../auth/home'
 
 /** App chrome for signed-in pages. */
 export default function Layout() {
@@ -11,7 +12,7 @@ export default function Layout() {
     <div className="min-h-screen">
       <header className="sticky top-0 z-10 bg-ink text-white">
         <div className="mx-auto flex max-w-xl items-center justify-between gap-3 px-4 py-3">
-          <Link to="/" className="text-xl font-extrabold tracking-tight">
+          <Link to={user ? homeFor(user.role) : '/'} className="text-xl font-extrabold tracking-tight">
             Mesh
           </Link>
           {user && (

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ApiError } from '../api/client'
-import { listMessages, sendMessage, useRequest, useRequestAction } from '../api/hooks'
+import { listMessages, sendMessage, useMe, useRequest, useRequestAction } from '../api/hooks'
+import { homeFor } from '../auth/home'
 import { Button, ErrorText, Loading, inputClass } from '../components/ui'
 import { STATUS_LABELS } from '../lib/labels'
 import type { HelpRequest, Message, RequesterFlags } from '../lib/types'
@@ -72,6 +73,7 @@ export default function Chat() {
   const { requestId = '' } = useParams()
   const navigate = useNavigate()
   const req = useRequest(requestId)
+  const home = homeFor(useMe().data?.user.role ?? null)
   const action = useRequestAction()
   const request = req.data?.request
   const chatOpen = request?.status === 'CLAIMED' || request?.status === 'RESOLVED'
@@ -92,7 +94,7 @@ export default function Chat() {
     return (
       <div>
         <p className="text-alert">{notFound ? "This chat doesn't exist or isn't yours." : 'Could not load this chat.'}</p>
-        <Link to="/" className="mt-4 inline-block font-semibold underline underline-offset-4">
+        <Link to={home} className="mt-4 inline-block font-semibold underline underline-offset-4">
           Back home
         </Link>
       </div>
@@ -123,7 +125,7 @@ export default function Chat() {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <Link to="/" className="text-sm font-semibold underline underline-offset-4">
+        <Link to={home} className="text-sm font-semibold underline underline-offset-4">
           Back
         </Link>
         <h1 className="mt-2 text-2xl font-extrabold">{other ? `Chat with ${other}` : 'Chat'}</h1>

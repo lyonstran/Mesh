@@ -1,12 +1,22 @@
 import { GoogleLogin } from '@react-oauth/google'
 import { useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
+import { ApiError } from '../api/client'
 import { useDemoUsers, useLogin, useMe } from '../api/hooks'
 import { homeFor } from '../auth/home'
-import { Button, ErrorText, inputClass } from '../components/ui'
+import { Button, inputClass } from '../components/ui'
+import type { MeResponse } from '../lib/types'
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined
 const DEMO_LOGIN = import.meta.env.VITE_DEMO_LOGIN === 'true'
+
+const SERVER_DOWN = "Mesh can't reach its server right now. Check your connection and try again in a moment."
+
+/** fetch() rejects with a TypeError when the server is unreachable; ApiErrors carry the server's message. */
+function loginErrorMessage(error: unknown): string {
+  if (error instanceof ApiError) return error.message
+  return SERVER_DOWN
+}
 
 export default function Login() {
   const me = useMe()
@@ -17,24 +27,15 @@ export default function Login() {
 
   if (me.data) return <Navigate to={homeFor(me.data.user.role)} replace />
 
-  const onLoggedIn = (data: { needs_onboarding: boolean; user: { role: 'requester' | 'helper' | null } }) =>
-    navigate(data.needs_onboarding ? '/onboarding' : homeFor(data.user.role), { replace: true })
+  const onLoggedIn = (data: MeResponse) => navigate(data.needs_onboarding ? '/onboarding' : homeFor(data.user.role), { replace: true })
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-xl flex-col px-4 py-10">
-      <p className="text-2xl font-extrabold tracking-tight">Mesh</p>
+    <main className="mx-auto max-w-md px-4 py-12">
+      <h1 className="text-3xl font-extrabold">Log in to Mesh</h1>
+      <p className="mt-2 text-ink-soft">New here? Logging in creates your account; you'll choose whether you need help or can help next.</p>
 
-      <section className="mt-14">
-        <h1 className="text-[2.35rem] leading-[1.1] font-extrabold">Help from the neighbors around you, after the storm.</h1>
-        <p className="mt-4 max-w-prose text-lg text-ink-soft">
-          Ask for help with what you need, or offer what you can do. Mesh matches requests with volunteers whose
-          skills fit, then opens a private chat between you.
-        </p>
-      </section>
-
-      <section className="mt-10 rounded-xl bg-surface p-5 shadow-[0_1px_0_var(--color-line)]">
-        <h2 className="font-semibold">Sign in to continue</h2>
-        <div className="mt-4 min-h-11">
+      <section className="mt-8 rounded-xl bg-surface p-5 shadow-[0_1px_0_var(--color-line)]">
+        <div className="min-h-11">
           {GOOGLE_CLIENT_ID ? (
             <GoogleLogin
               onSuccess={({ credential }) => {
@@ -62,8 +63,14 @@ export default function Login() {
               Or try a demo account
             </label>
             <div className="mt-2 flex gap-2">
-              <select id="demo-user" value={demoId} onChange={(e) => setDemoId(e.target.value)} className={inputClass}>
-                <option value="">Choose a demo user</option>
+              <select
+                id="demo-user"
+                value={demoId}
+                onChange={(e) => setDemoId(e.target.value)}
+                className={inputClass}
+                disabled={!demoUsers.data}
+              >
+                <option value="">{demoUsers.isPending ? 'Loading demo users…' : 'Choose a demo user'}</option>
                 {demoUsers.data?.users.map((u) => (
                   <option key={u.id} value={u.id}>
                     {u.name} ({u.role === 'helper' ? 'volunteer' : 'requester'})
@@ -74,17 +81,19 @@ export default function Login() {
                 Sign in
               </Button>
             </div>
+            {demoUsers.isError && <p className="mt-2 text-sm text-alert">{loginErrorMessage(demoUsers.error)}</p>}
             {demoUsers.data?.users.length === 0 && (
               <p className="mt-2 text-sm text-ink-soft">No demo users yet. Run python -m app.seed --reset.</p>
             )}
           </form>
         )}
-        <ErrorText error={login.error} />
-      </section>
 
-      <p className="mt-auto pt-10 text-sm text-ink-soft">
-        Mesh is not an emergency service. If anyone's life is in danger, call 911.
-      </p>
+        {login.error && (
+          <p role="alert" className="mt-3 text-alert">
+            {loginErrorMessage(login.error)}
+          </p>
+        )}
+      </section>
     </main>
   )
 }

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Navigate, useLocation } from 'react-router-dom'
+import { Link, Navigate, useLocation } from 'react-router-dom'
 import { ApiError } from '../api/client'
 import { useMe } from '../api/hooks'
 import { Loading } from '../components/ui'
@@ -15,9 +15,13 @@ export function AuthGuard({ children }: { children: ReactNode }) {
   if (me.error) {
     if (me.error instanceof ApiError && me.error.status === 401) return <Navigate to="/login" replace />
     return (
-      <p role="alert" className="p-6 text-alert">
-        Mesh can't reach its server right now. Check your connection and reload the page.
-      </p>
+      <div role="alert" className="mx-auto max-w-md px-4 py-16">
+        <h1 className="text-2xl font-extrabold">Mesh can't reach its server</h1>
+        <p className="mt-2 text-ink-soft">Check your connection and reload the page. If you're running Mesh locally, start the backend.</p>
+        <Link to="/" className="mt-6 inline-block font-semibold underline underline-offset-4">
+          Back to the home page
+        </Link>
+      </div>
     )
   }
   if (me.data.needs_onboarding && location.pathname !== '/onboarding') return <Navigate to="/onboarding" replace />
@@ -30,11 +34,4 @@ export function RoleGuard({ role, children }: { role: Role; children: ReactNode 
   const userRole = me.data?.user.role ?? null
   if (userRole !== role) return <Navigate to={homeFor(userRole)} replace />
   return children
-}
-
-export function HomeRedirect() {
-  const me = useMe()
-  if (me.isPending) return <Loading />
-  if (me.error) return <Navigate to="/login" replace />
-  return <Navigate to={homeFor(me.data.user.role)} replace />
 }
