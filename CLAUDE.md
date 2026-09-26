@@ -19,8 +19,8 @@ Priority combines AI triage, live hazards (NWS + Open-Meteo), and CDC EJI tract 
 
 - **Frontend:** Vite + React + TypeScript, react-router-dom, TanStack Query, react-leaflet (OSM tiles), Tailwind, @react-oauth/google
 - **Backend:** FastAPI, pydantic v2, pydantic-settings, PyMongo async (`AsyncMongoClient`; not Motor), httpx, google-auth, PyJWT
-- **Database:** MongoDB Atlas (2dsphere, TTL indexes, change streams)
-- **AI:** Muse Spark + Muse Voice Transcribe behind `LLMProvider` (`LLM_PROVIDER=mock|muse`)
+- **Database:** MongoDB Atlas (Vector Search, 2dsphere, TTL indexes, change streams)
+- **AI:** Muse Spark + Muse Voice Transcribe behind `LLMProvider` (`LLM_PROVIDER=mock|muse`); embeddings via fastembed (`all-MiniLM-L6-v2`, local; Meta has no embeddings API)
 - **TTS:** ElevenLabs
 - **Deploy:** Vultr VM, Docker Compose, Caddy (HTTPS, same domain for SPA + `/api` + `/ws`)
 
@@ -36,9 +36,9 @@ Priority combines AI triage, live hazards (NWS + Open-Meteo), and CDC EJI tract 
 # backend (from backend/)
 pip install -r requirements-dev.txt    # runtime deps + pytest (Docker image uses requirements.txt)
 uvicorn app.main:app --reload --port 8000
-pytest -q
+pytest -q                              # DB tests need MONGODB_TEST_URI (a throwaway DB; skipped if unset)
 curl localhost:8000/api/health          # {"ok":true,"db":"ok",...} once MONGODB_URI works
-python -m app.seed --reset            # demo data (add --keepalive during demos)
+python -m app.seed --reset            # demo users + requests (flagged demo: true)
 
 # data (from data/)
 python prepare_tracts.py && python load_tracts.py
@@ -91,7 +91,7 @@ If a command above doesn't exist yet, create the script when you scaffold. Keep 
 
 ## Workflow
 
-- Build in the PLAN.md §18 milestone order (M0 → M5). Don't start a milestone until the previous one's "done when" check passes.
+- **Current target: the MVP in PLAN.md §0.1.** After it works, build in the §18 milestone order and the §21 backlog. Don't start a milestone until the previous one's "done when" check passes.
 - After each milestone:
   1. run backend tests and the frontend typecheck;
   2. summarize what works and what's stubbed;

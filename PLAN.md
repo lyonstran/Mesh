@@ -37,6 +37,93 @@ Every sponsor technology must do real work, not decoration.
 
 ---
 
+## 0.1 Iteration 1: MVP (current build target)
+
+> **Build this first.** Everything else in this plan is the target for later iterations (see §21). Where this section and a later section disagree, this section wins for the MVP.
+
+The MVP is a working prototype the team builds on afterwards. Both sides are registered users. There are no external or social-media posts, no location data, and no map.
+
+### User journeys
+- **Volunteer** (role `helper`, shown as "Volunteer" in the UI):
+  1. Signs in with Google.
+  2. Onboarding: name, language, background, skills and resources (enums from §6), and a free-text "What I can offer."
+  3. Sees open requests **ranked purely by vector similarity** between each request and their profile.
+  4. Picks a request (atomic claim) and goes to a private chat with that requester.
+- **Requester:**
+  1. Signs in with Google.
+  2. Onboarding: name, language, background, and optional `requester_flags` (shared only with the volunteer who picks the request).
+  3. Submits a request. Emergency phrases trigger the 911 interstitial first (§9.2 step 5, keyword rules only).
+  4. When a volunteer picks it, sees the private chat with that volunteer.
+
+### In scope
+- Google auth, JWT cookie, and demo login (§6).
+- Onboarding and profile editing.
+- Requests with the statuses `OPEN`, `CLAIMED`, `RESOLVED`, and `CANCELLED` (a subset of §9.1, so later iterations extend it):
+  - `OPEN` → `CLAIMED` (volunteer claim) or `CANCELLED` (requester).
+  - `CLAIMED` → `RESOLVED` (either party), `OPEN` (volunteer release), or `CANCELLED` (requester).
+  - A requester has at most 1 active request.
+- Similarity ranking.
+- Private chat per claimed request, using REST polling.
+- The 911 keyword check (EN + ES).
+- Seed data.
+
+### Out of scope for the MVP
+Location, fuzzing, and maps; hazards and simulation; EJI and tracts; triage category/urgency and the priority formula; voice; the coordinator role; WebSocket realtime; translation; verified-helper rules; social-media leads. See §21.
+
+### Similarity ranking
+1. **Text to embed:**
+   - For a request: the request text.
+   - For a volunteer: skills + resources + "What I can offer" + background, joined into `profile_text`.
+2. **Normalize (optional, Muse Spark):** when `LLM_PROVIDER=muse`, Spark rewrites the text into a short list of needs (request) or capabilities (volunteer) before embedding. Under `mock` the text passes through unchanged.
+3. **Embed:** `fastembed` runs `sentence-transformers/all-MiniLM-L6-v2` locally (384 dimensions, ONNX, about 90 MB downloaded on first use). The Meta Model API has no embeddings endpoint (checked 2026-09-26), so vectors come from this local model.
+   - We use `fastembed` instead of the `sentence-transformers` package because it runs the same model without PyTorch and fits the smallest Vultr VM.
+4. **Retrieve:** MongoDB Atlas Vector Search (`$vectorSearch` on search index `requests_embedding`: path `embedding`, 384 dimensions, cosine similarity, filter on `status`) returns `OPEN` requests ordered by similarity to the volunteer's profile vector.
+   - When Atlas Search isn't available (local Mongo, tests), the backend computes cosine similarity in Python instead.
+   - `VECTOR_SEARCH=auto|atlas|local` controls this, and `/api/health` reports which mode is active.
+5. **Scores come from code.** The LLM only rewrites text; it never produces a score or a rank.
+
+### MVP endpoints
+| Method | Path | Who | Notes |
+|---|---|---|---|
+| POST | `/api/auth/google` | public | §6 |
+| POST | `/api/auth/logout` | any | |
+| GET | `/api/me` | authed | |
+| GET/POST | `/api/auth/demo-users`, `/api/auth/demo` | public | 404 unless `DEMO_LOGIN` |
+| POST | `/api/onboarding` | authed | role `requester` or `helper` |
+| PATCH | `/api/me` | onboarded | re-embeds volunteer profile |
+| POST | `/api/requests/check` | requester | `{text}` → `{emergency}`; no save |
+| POST | `/api/requests` | requester | max 1 active → 409 |
+| GET | `/api/requests/mine` | onboarded | requester: own; volunteer: claimed |
+| GET | `/api/requests/ranked` | volunteer | `OPEN` requests + similarity score |
+| GET | `/api/requests/{id}` | per serializer | |
+| POST | `/api/requests/{id}/claim` | volunteer | atomic; 409 `ALREADY_CLAIMED` |
+| POST | `/api/requests/{id}/release` | assigned volunteer | back to `OPEN` |
+| POST | `/api/requests/{id}/resolve` | requester or assigned volunteer | |
+| POST | `/api/requests/{id}/cancel` | requester | |
+| GET/POST | `/api/requests/{id}/messages` | requester + assigned volunteer | `?after=<iso>` for polling |
+
+### MVP privacy (serializer, §9.6 adapted)
+| Viewer | Request text | Requester name / flags | Chat |
+|---|---|---|---|
+| The requester | yes | own | yes, once claimed |
+| Assigned volunteer | yes | yes | yes |
+| Other volunteers | yes (plus score) | no | no |
+
+### Pages
+`/login`, `/onboarding`, `/r` (requester: submit form, current request, chat link), `/h` (volunteer: my active chats plus the ranked list), `/chat/:requestId`. Polling intervals: chat every 3 s, requester status every 5 s, ranked list every 10 s.
+
+### Hard rules that bind the MVP
+All of §14 still applies. In particular:
+- no invented API specs;
+- the privacy serializer;
+- the 911 path;
+- no secrets in git;
+- `DEMO_LOGIN` returns 404 when off;
+- the app works with `LLM_PROVIDER=mock`;
+- similarity scores come from code, never the LLM.
+
+---
+
 ## 1. Architecture overview
 
 ```
@@ -160,10 +247,12 @@ DEMO_LOGIN=false                  # true only for local/demo; enables seeded-use
 COORDINATOR_INVITE_CODE=          # [HUMAN] choose a code
 NWS_USER_AGENT=(Mesh, team-email@example.com)   # [HUMAN] real contact email
 MUSE_API_KEY=                     # [HUMAN]
-MUSE_BASE_URL=                    # [HUMAN] from docs
-MUSE_TEXT_MODEL=                  # [HUMAN] Muse Spark model id
-MUSE_TRANSCRIBE_MODEL=            # [HUMAN]
+MUSE_BASE_URL=https://api.meta.ai/v1          # docs/muse-api.md
+MUSE_TEXT_MODEL=muse-spark-1.3                # docs/muse-api.md
+MUSE_TRANSCRIBE_MODEL=muse-voice-transcribe-1.0
 LLM_PROVIDER=mock                 # mock | muse
+EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2   # fastembed, local (§0.1)
+VECTOR_SEARCH=auto                # auto | atlas | local (§0.1)
 ELEVENLABS_API_KEY=               # [HUMAN]
 ELEVENLABS_VOICE_ID=              # [HUMAN] pick a multilingual voice
 ELEVENLABS_MODEL_ID=eleven_multilingual_v2   # verify against current docs
@@ -412,7 +501,7 @@ class LLMProvider(Protocol):
     async def complete_json(self, system: str, user: str, schema: type[BaseModel], temperature: float = 0.2) -> BaseModel: ...
     async def complete_text(self, system: str, user: str, temperature: float = 0.3) -> str: ...
 ```
-- **`MuseProvider` [HUMAN]:** implement **only** from `docs/muse-api.md`. Do not invent endpoints, auth headers, or model IDs. If the docs show an OpenAI-compatible chat API, use that format; otherwise follow the docs exactly.
+- **`MuseProvider`:** implement **only** from `docs/muse-api.md`. Do not invent endpoints, auth headers, or model IDs. The docs show an OpenAI-compatible chat API (`POST {MUSE_BASE_URL}/chat/completions`, `Authorization: Bearer`), so use that format. The MVP uses only `complete_text` (§0.1 normalization).
 - **`MockProvider`:** deterministic keyword-based outputs so the whole app works with no API key. Used in tests and when `LLM_PROVIDER=mock`.
 - **JSON handling:** ask for JSON only, strip code fences, and validate with pydantic. On failure, retry once with the validation error appended. On a second failure, raise `TriageFallback` so the caller uses rules-only output.
 
@@ -828,6 +917,8 @@ server: { proxy: { '/api': 'http://localhost:8000', '/ws': { target: 'ws://local
 
 ## 18. Milestones (build order)
 
+> **Post-MVP.** Build §0.1 first. These milestones describe the full target and apply after the MVP works.
+
 Times assume a Sunday ~9 AM ET deadline. **[HUMAN] Confirm the real cutoff.**
 
 | # | Target | Deliverable | Done when |
@@ -881,3 +972,74 @@ Times assume a Sunday ~9 AM ET deadline. **[HUMAN] Confirm the real cutoff.**
 - [ ] Download the EJI 2024 CSV and GA TIGER tracts into `data/raw/`; fill `eji_columns.yaml` from the data dictionary.
 - [ ] (Optional) Supply real Atlanta shelter or cooling-center locations with sources.
 - [ ] Set the NWS User-Agent contact email and the coordinator invite code.
+
+---
+
+## 21. Backlog (iteration 2+)
+
+These build on the MVP (§0.1). Both specs below came from judge feedback. They are **not** in the MVP. All §14 rules apply.
+
+### 21.1 AI-driven helper matching v2
+Extends §9.9 and the §0.1 similarity ranking.
+1. **Hard filters (code):** on duty, within radius, fewer than 2 active claims, verified if urgency ≥ 4.
+2. **Retrieve:** top ~10 candidates by embedding similarity between the request's needs and helper profiles (Atlas Vector Search, §0.1).
+3. **LLM rerank (Muse Spark, structured JSON).** Per candidate, it returns which request needs they cover and a short reason. If no single helper covers all needs, it may propose a 2-helper team. **The LLM outputs rankings and coverage only**, never distances or priority numbers.
+4. **Validate (code):**
+   - every `helper_id` must be in the candidate list;
+   - re-check the hard filters;
+   - on any failure, fall back to the deterministic §9.9 score.
+5. **Fairness:** penalize helpers who already have an active claim.
+6. **Push model:**
+   - Send the top match a `match.suggested` WebSocket event with accept/decline.
+   - On decline or a 5-minute timeout, offer to the next candidate.
+   - Helpers can still browse the feed.
+7. **UI:** a need-coverage checklist per matched helper and a "Matched by AI" reason.
+8. **Evaluation (`backend/eval/matching_eval.py`):**
+   - ~30 synthetic requests, ~15 helpers, and a human-labeled best-helper file (labels are `TODO(HUMAN)`).
+   - Reports top-1 and top-3 agreement for formula vs embeddings vs embeddings + LLM.
+
+### 21.2 Social-media leads (synthetic only)
+- **No real scraping.**
+  - A `SourceAdapter` interface with a `SyntheticSource` implementation only.
+  - Every lead has `synthetic: true` and shows a SYNTHETIC badge.
+- **Leads are not requests.**
+  - They're stored in a `leads` collection visible only to coordinators, with minimal fields and a TTL expiry of 48 h.
+  - Helpers never see raw post text or handles.
+  - The TTL is data minimization; classification never deletes anything.
+- **Classifier labels:** `genuine_request`, `offer_to_help`, `scam`, `spam_bot`, `misinfo_rumor`, `not_actionable`, `duplicate`, plus confidence and reasons.
+- **Signals:**
+  - content (money vs goods, payment handles, links, templates);
+  - near-duplicate detection across accounts via embeddings;
+  - plausibility vs current hazard data (a feature, never a veto);
+  - simulated account metadata.
+- **Buckets:** `surface`, `needs_review`, `suppressed` (logged and reviewable). No auto-delete.
+- **Conversion:**
+  - A coordinator must confirm a lead (simulated "contacted and confirmed") before it converts to a normal request via the existing pipeline.
+  - Social-sourced requests are claimable only by verified helpers.
+  - Strip payment handles and URLs from displayed text. Mesh never facilitates money transfer.
+- **Untrusted input:** delimit post text, force structured output, and never let it set fields directly. The dataset includes prompt-injection samples.
+- **Dataset (`backend/eval/social_posts.jsonl`):**
+  - Mixes template-generated, LLM-generated, and `TODO(HUMAN)` hand-written posts.
+  - Includes hard cases: genuine posts mentioning money, lure scams without payment info, sarcasm, Spanish, informal and typo-heavy writing.
+  - Has a held-out test split.
+- **Eval script** prints:
+  - a confusion matrix;
+  - precision and recall for `scam` and `genuine_request`;
+  - the false-positive rate by writing-style tag;
+  - a keyword-rules baseline for comparison.
+- **Coordinator UI:** a leads queue with label, confidence, reasons, bucket, and confirm/dismiss actions.
+
+### 21.3 Deferred from the full plan
+Everything in §§4–13 not listed in §0.1:
+- location, fuzzing, and maps;
+- hazards and simulation;
+- EJI and tracts;
+- triage category/urgency and priority;
+- voice (transcribe and TTS);
+- the coordinator dashboard;
+- WebSocket realtime and change streams;
+- chat translation;
+- verified-helper rules;
+- deploy.
+
+If time is short, cut coordinator weight sliders and chat translation first.
