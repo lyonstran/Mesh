@@ -26,9 +26,9 @@ class Settings(BaseSettings):
     coordinator_invite_code: str = ""
     nws_user_agent: str = "(Mesh, team-email@example.com)"
     muse_api_key: str = ""
-    muse_base_url: str = ""
-    muse_text_model: str = ""
-    muse_transcribe_model: str = ""
+    muse_base_url: str = "https://api.meta.ai/v1"
+    muse_text_model: str = "muse-spark-1.3"
+    muse_transcribe_model: str = "muse-voice-transcribe-1.0"
     llm_provider: Literal["mock", "muse"] = "mock"
     elevenlabs_api_key: str = ""
     elevenlabs_voice_id: str = ""
@@ -36,6 +36,8 @@ class Settings(BaseSettings):
     hazard_cache_seconds: int = 300
     default_timezone: str = "America/New_York"
     realtime_mode: Literal["poll", "ws"] = "poll"
+    embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+    vector_search: Literal["auto", "atlas", "local"] = "auto"
 
 
 @lru_cache

@@ -1,26 +1,30 @@
 from fastapi import APIRouter
 
 from app import db
+from app.ai.provider import get_provider
 from app.config import get_settings
+from app.services import ranking
 
 router = APIRouter()
 
 
 @router.get("/api/health")
 async def health() -> dict:
-    settings = get_settings()
     # Retry init if startup failed (e.g. Atlas IP allowlist fixed after boot).
-    db_ok = db.is_ready() or await db.init(settings)
+    db_ok = db.is_ready() or await db.init(get_settings())
     sim_active = False
     if db_ok:
         try:
-            sim = await db.get_db().settings.find_one({"_id": "sim"})
+            database = db.get_db()
+            sim = await database.settings.find_one({"_id": "sim"})
             sim_active = bool(sim and sim.get("active"))
+            await ranking.ensure_initialized(database)
         except Exception:
             db_ok = False
     return {
         "ok": True,
         "db": "ok" if db_ok else "error",
-        "llm_provider": settings.llm_provider,
+        "llm_provider": get_provider().name,
+        "vector_search": ranking.mode(),
         "sim_active": sim_active,
     }
