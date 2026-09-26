@@ -1,0 +1,883 @@
+# Mesh: Build Plan (HackGT 13)
+
+> **For Claude Code:** This is the complete spec. Read all of it before writing code. Build in the milestone order in §13. Anything marked **[HUMAN]** needs input from the team (API docs, keys, files). Do not guess it. Stub it behind an interface and leave a clear TODO. Rules in §14 are non-negotiable.
+
+---
+
+## 0. Product summary
+
+**Name note:** "Mesh" refers to a *human* mesh, meaning neighbors linked to neighbors. The app does **not** do peer-to-peer or offline mesh networking. It needs internet access (§1). Don't describe it as offline-capable in UI copy, docs, or the pitch. Use the product name "Mesh" in UI titles, the page `<title>`, and the manifest.
+
+Mesh is a mobile-first web app for weather-disaster relief. It works like a delivery app, but for help.
+
+- **Requesters** ask for help by voice or text ("tree on my power line, I use an oxygen machine").
+- **AI triage** turns the request into structured data: category, urgency, and flags.
+- **Helpers** (verified volunteers) see nearby requests on a map, ranked by a transparent priority score. They claim a request and move it through statuses.
+- **Live hazard data** feeds priority and suggests likely needs:
+  - NWS alerts;
+  - Open-Meteo forecast and air quality;
+  - CDC/ATSDR EJI tract vulnerability.
+- **Coordinators** (community organizations) see a regional dashboard and an AI situation summary.
+
+**Region:** Georgia, demo centered on the HackGT venue at Georgia Tech (≈ 33.7756, -84.3963).
+
+**Prize targets:**
+- Meta "Bringing people closer together with AI": uses Muse Spark and Muse Voice Transcribe.
+- Aramco "A Marina's Mission."
+- MLH: MongoDB Atlas, ElevenLabs, Vultr, .TECH domain.
+
+Every sponsor technology must do real work, not decoration.
+
+**Non-goals:**
+- Not a 911 replacement.
+- No real emergency dispatch.
+- No native mobile app.
+- No payments.
+- No multi-region scaling.
+
+---
+
+## 1. Architecture overview
+
+```
+ Phone/Browser (Vite + React SPA)
+   │  HTTPS REST (/api/*)      WSS (/ws)
+   ▼
+ Caddy (Vultr VM) ── serves frontend/dist static files
+   │  reverse proxy /api/* and /ws
+   ▼
+ FastAPI (uvicorn, single process)
+   ├── auth (Google ID token → own JWT cookie)
+   ├── requests (state machine, fuzzing, priority, matching)
+   ├── hazards (NWS + Open-Meteo, cache, simulation)
+   ├── ai (triage, match reasons, translation, summaries) → Muse Spark
+   ├── voice (transcribe → Muse Voice Transcribe; speak → ElevenLabs)
+   ├── realtime (WebSocket manager + Mongo change streams)
+   └── geo (Census geocoder, tract lookup via $geoIntersects)
+   │
+   ▼
+ MongoDB Atlas (users, presence, requests, messages, tracts, resources, hazard_cache, settings)
+```
+
+**One domain for everything** (`https://<domain>.tech`), so:
+- there is no CORS setup;
+- the session cookie is sent on the WebSocket handshake automatically.
+
+In local dev, the Vite dev server proxies `/api` and `/ws` to `localhost:8000`.
+
+---
+
+## 2. Repository layout
+
+```
+mesh/
+├── PLAN.md
+├── CLAUDE.md                  # short rules summary pointing to PLAN.md
+├── .env.example
+├── docker-compose.yml
+├── deploy/
+│   └── Caddyfile
+├── data/
+│   ├── raw/                   # [HUMAN] EJI CSV + TIGER tract shapefile go here (gitignored)
+│   ├── processed/             # generated (gitignored)
+│   ├── eji_columns.yaml       # mapping of EJI column names (verify vs data dictionary)
+│   ├── prepare_tracts.py      # EJI + TIGER → GeoJSON
+│   └── load_tracts.py         # GeoJSON → Mongo tracts collection
+├── backend/
+│   ├── pyproject.toml / requirements.txt
+│   ├── Dockerfile
+│   ├── app/
+│   │   ├── main.py            # FastAPI app, lifespan (db, indexes, change-stream task)
+│   │   ├── config.py          # pydantic-settings
+│   │   ├── db.py              # AsyncMongoClient, get_db, ensure_indexes()
+│   │   ├── models.py          # pydantic models + enums
+│   │   ├── deps.py            # get_current_user, require_role
+│   │   ├── security.py        # JWT create/verify
+│   │   ├── routers/
+│   │   │   ├── auth.py
+│   │   │   ├── users.py
+│   │   │   ├── requests.py
+│   │   │   ├── messages.py
+│   │   │   ├── hazards.py
+│   │   │   ├── sim.py
+│   │   │   ├── geo.py
+│   │   │   ├── voice.py
+│   │   │   ├── coordinator.py
+│   │   │   ├── resources.py
+│   │   │   └── ws.py
+│   │   ├── services/
+│   │   │   ├── hazards.py     # fetch, normalize, cache, combine
+│   │   │   ├── triage.py      # rules floor + LLM merge
+│   │   │   ├── rules.py       # keyword lists (EN + ES)
+│   │   │   ├── priority.py
+│   │   │   ├── matching.py
+│   │   │   ├── fuzz.py
+│   │   │   ├── state.py       # request state machine
+│   │   │   ├── serialize.py   # viewer-aware request serialization
+│   │   │   ├── geocode.py
+│   │   │   ├── tts.py         # ElevenLabs
+│   │   │   ├── transcribe.py  # Muse Voice Transcribe
+│   │   │   └── realtime.py    # ConnectionManager + change stream broadcaster
+│   │   ├── ai/
+│   │   │   ├── provider.py    # LLMProvider protocol
+│   │   │   ├── muse.py        # MuseProvider [HUMAN docs]
+│   │   │   ├── mock.py        # MockProvider (deterministic, for dev/tests)
+│   │   │   └── prompts.py
+│   │   ├── scenarios/         # simulation JSON files
+│   │   └── seed.py            # demo users/requests/resources
+│   └── tests/
+├── frontend/
+│   ├── package.json
+│   ├── vite.config.ts         # dev proxy /api, /ws → :8000
+│   ├── index.html
+│   └── src/
+│       ├── main.tsx, App.tsx, router.tsx
+│       ├── api/               # fetch wrappers + TanStack Query hooks
+│       ├── realtime/          # WebSocket provider, event → cache updates
+│       ├── auth/              # Google button, AuthGuard, RoleGuard
+│       ├── pages/             # Login, Onboarding, Requester*, Helper*, Coordinator, Settings
+│       ├── components/        # Map, HazardBanner, PriorityBreakdown, VoiceRecorder, ...
+│       ├── hooks/             # useGeolocationStream, useAudioPlayer
+│       └── lib/               # types.ts (mirror backend models), constants
+└── docs/
+    ├── muse-api.md            # [HUMAN] paste Muse API docs here
+    └── demo-script.md
+```
+
+---
+
+## 3. Environment variables (`.env.example`)
+
+```
+# Backend
+MONGODB_URI=                      # [HUMAN] Atlas SRV string
+MONGODB_DB=mesh
+JWT_SECRET=                       # long random string
+JWT_TTL_HOURS=24
+GOOGLE_CLIENT_ID=                 # [HUMAN] OAuth Web client ID
+COOKIE_SECURE=false               # true in prod
+DEMO_LOGIN=false                  # true only for local/demo; enables seeded-user login
+COORDINATOR_INVITE_CODE=          # [HUMAN] choose a code
+NWS_USER_AGENT=(Mesh, team-email@example.com)   # [HUMAN] real contact email
+MUSE_API_KEY=                     # [HUMAN]
+MUSE_BASE_URL=                    # [HUMAN] from docs
+MUSE_TEXT_MODEL=                  # [HUMAN] Muse Spark model id
+MUSE_TRANSCRIBE_MODEL=            # [HUMAN]
+LLM_PROVIDER=mock                 # mock | muse
+ELEVENLABS_API_KEY=               # [HUMAN]
+ELEVENLABS_VOICE_ID=              # [HUMAN] pick a multilingual voice
+ELEVENLABS_MODEL_ID=eleven_multilingual_v2   # verify against current docs
+HAZARD_CACHE_SECONDS=300
+DEFAULT_TIMEZONE=America/New_York
+
+# Frontend (Vite, must be prefixed VITE_)
+VITE_GOOGLE_CLIENT_ID=
+VITE_DEMO_LOGIN=false
+```
+
+Never commit `.env`. Add `.env`, `data/raw`, `data/processed`, and `backend/media` to `.gitignore`.
+
+---
+
+## 4. Component: Data preprocessing (`data/`)
+
+**Purpose:** get Georgia census tracts, with EJI scores and geometry, into MongoDB so that any point can be mapped to a tract and its vulnerability percentile without calling an external API.
+
+**Libraries:** `pandas`, `geopandas`, `shapely` (≥2.0, for `make_valid`), `pyyaml`, `pymongo`.
+
+**Inputs [HUMAN]:**
+1. The CDC/ATSDR EJI 2024 CSV (Georgia rows, or the national file filtered to state FIPS `13`) goes in `data/raw/`. Verify the download is still available, since some federal environmental datasets changed in 2025.
+2. The Census TIGER/Line tract shapefile for Georgia (`tl_2020_13_tract.zip`) goes in `data/raw/`. Use the boundary vintage that matches EJI's tract GEOIDs (2020 tracts expected).
+
+**`eji_columns.yaml`:** maps our field names to EJI column names. The names below are placeholders; open the EJI data dictionary and correct them. Do not assume.
+```yaml
+geoid: GEOID           # 11-digit tract FIPS as string
+eji_rank: RPL_EJI      # overall EJI percentile rank 0-1
+climate_rank: null     # EJI + Climate Burden rank column (fill in from dictionary)
+env_rank: null         # environmental burden module
+svm_rank: null         # social vulnerability module
+hvm_rank: null         # health vulnerability module
+```
+
+**`prepare_tracts.py` steps:**
+1. Read the EJI CSV with `dtype={geoid_col: str}`. Zero-pad GEOID to 11 chars. Filter to GEOIDs starting with `13`.
+2. Read the TIGER shapefile and reproject to EPSG:4326.
+3. Left-join tracts to EJI on GEOID. **Print the match rate**; it must be > 99%. On failure, print unmatched sample GEOIDs and exit non-zero.
+4. Replace EJI sentinel values (e.g., `-999`) with null.
+5. Simplify geometries with `simplify(0.0001, preserve_topology=True)`, apply `make_valid`, and keep only Polygon or MultiPolygon. Mongo's 2dsphere index rejects invalid polygons.
+6. Write `data/processed/ga_tracts.geojson` with properties `{geoid, eji_rank, climate_rank, env_rank, svm_rank, hvm_rank, name}`.
+
+**`load_tracts.py` steps:**
+1. Upsert each feature into `tracts` as `{_id: geoid, geoid, eji_rank, ..., geometry}`.
+2. Create a `2dsphere` index on `geometry`.
+3. Log inserted and failed counts. Failures should be 0; fix geometry if not.
+
+**At runtime:** `tract_for_point(lon, lat)` runs `tracts.find_one({"geometry": {"$geoIntersects": {"$geometry": {"type": "Point", "coordinates": [lon, lat]}}}})`.
+
+---
+
+## 5. Component: Backend core (FastAPI)
+
+**Libraries:**
+- `fastapi`, `uvicorn[standard]`, `pydantic` v2, `pydantic-settings`;
+- `pymongo` (≥4.9, using its **async** `AsyncMongoClient`; do not use Motor, which is being deprecated);
+- `httpx` (async HTTP for external APIs);
+- `google-auth` (ID token verification);
+- `pyjwt`;
+- `python-multipart` (audio uploads);
+- `pytest`, `pytest-asyncio`.
+
+**`main.py` lifespan:**
+1. Connect Mongo.
+2. Run `ensure_indexes()`.
+3. Create the settings documents if missing (weights, sim).
+4. Start the change-stream broadcaster task (§10).
+5. On shutdown, cancel tasks and close the client.
+
+**Indexes (`db.ensure_indexes`):**
+
+| Collection | Index |
+|---|---|
+| users | unique `google_sub`; `email` |
+| presence | 2dsphere `location`; unique `user_id`; **TTL on `updated_at`, `expireAfterSeconds=120`** |
+| requests | 2dsphere `location`; 2dsphere `display_location`; `status`; `requester_id`; `helper_id`; `created_at` |
+| messages | `request_id` + `ts` |
+| tracts | 2dsphere `geometry` |
+| resources | 2dsphere `location` |
+| hazard_cache | `_id` (key string); TTL on `fetched_at`, `expireAfterSeconds=HAZARD_CACHE_SECONDS` |
+
+**Error format:** `{"error": {"code": "STRING_CODE", "message": "human text"}}` with the correct HTTP status.
+
+**`/api/health`** returns `{ok, db, llm_provider, sim_active}`.
+
+---
+
+## 6. Component: Authentication and onboarding
+
+**Libraries:** `google-auth`, `pyjwt` (backend); `@react-oauth/google` (frontend).
+
+### Google Cloud setup [HUMAN]
+1. Create an OAuth 2.0 Client ID of type "Web application."
+2. Set authorized JavaScript origins to `http://localhost:5173` and `https://<domain>.tech`.
+3. Set scopes to `openid email profile` only.
+4. On the consent screen, while in "Testing" mode, add every teammate and every demo account as test users, or publish the app. Basic scopes don't require verification.
+
+### Flow
+1. The frontend renders `<GoogleLogin onSuccess={({credential}) => POST /api/auth/google {credential}} />`.
+2. The backend verifies the token with `id_token.verify_oauth2_token(credential, google.auth.transport.requests.Request(), GOOGLE_CLIENT_ID)`, checks the issuer, and reads `sub`, `email`, `name`, `picture`.
+3. It upserts the user by `google_sub`, using `$setOnInsert` for defaults (`role: null`, `verified: false`).
+4. It issues a JWT `{sub: user_id, exp}` and sets cookie `session` with `httponly`, `samesite=lax`, `secure=COOKIE_SECURE`, `path=/`.
+5. It returns `{user, needs_onboarding: role is null}`.
+6. The frontend routes to `/onboarding` if onboarding is needed; otherwise it routes to the role's home page.
+
+**Endpoints:**
+- `POST /api/auth/google`
+- `POST /api/auth/logout` (clears cookie)
+- `GET /api/me`
+- `POST /api/auth/demo {user_id}`: **only if `DEMO_LOGIN=true`**; otherwise return 404. Lists seeded users via `GET /api/auth/demo-users` under the same flag.
+
+**Dependencies (`deps.py`):**
+- `get_current_user`: reads the cookie and decodes the JWT. It returns **401** if either is missing or invalid, and **401** if the user is not found.
+- `require_role(*roles)`: returns **403** otherwise.
+- `require_onboarded`: returns **409** `ONBOARDING_REQUIRED` if the role is null.
+
+### Onboarding
+`POST /api/onboarding` body:
+```json
+{
+  "role": "requester" | "helper" | "coordinator",
+  "name": "string",
+  "language": "en" | "es" | ...,
+  "home_location": {"lat": 0, "lon": 0} ,        // from map pin or geocoded address
+  "helper": {"skills": [], "resources": [], "radius_km": 5, "org": "optional"},
+  "requester_flags": {"medical_device": false, "mobility": false, "lives_alone": false},
+  "invite_code": "only for coordinator"
+}
+```
+
+**Rules:**
+- `coordinator` requires `invite_code == COORDINATOR_INVITE_CODE`; otherwise 403.
+- `helper` users are created with `verified: false`. Verification is set only by seed or by a coordinator endpoint: `POST /api/coordinator/verify/{user_id}`.
+- `requester_flags` are optional. The UI must explain that they are shared only with a helper who has claimed the user's request.
+
+**Other user endpoints:**
+- `PATCH /api/me`: edit the profile and switch roles (requester ⇄ helper). A user cannot switch to coordinator without the code.
+- `POST /api/me/duty {on_duty: bool}`: helpers only.
+
+**Enums:**
+- **Skills:** `first_aid`, `cpr`, `nursing`, `chainsaw`, `heavy_lifting`, `driving`, `spanish`, `other_language`, `electrical_safe`, `childcare`, `elder_care`.
+- **Resources:** `vehicle`, `truck`, `generator`, `power_bank`, `water`, `food`, `tarp`, `sandbags`, `ac_space`, `n95_masks`, `medical_kit`.
+
+---
+
+## 7. Component: Hazard engine (`services/hazards.py`)
+
+**Libraries:** `httpx` (async, 8 s timeout, one retry).
+
+**Principle:** official NWS alerts come first. Values derived from raw forecasts are only an "elevated" signal, capped at level 2.
+
+### Sources
+1. **NWS active alerts:** `GET https://api.weather.gov/alerts/active?point={lat},{lon}`
+   - Headers: `User-Agent: {NWS_USER_AGENT}`, `Accept: application/geo+json`.
+   - For each feature, read `properties`: `event`, `severity`, `urgency`, `certainty`, `headline`, `description`, `instruction`, `onset`, `expires`, `areaDesc`, `id`.
+   - Regional variant for coordinators: `GET https://api.weather.gov/alerts/active?area=GA`.
+   - Use `/alerts/active`, not the deprecated `/alerts?active=true`.
+2. **Open-Meteo forecast:**
+   - URL: `GET https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,apparent_temperature,wind_gusts_10m,precipitation&hourly=apparent_temperature,wind_gusts_10m,precipitation&forecast_hours=12&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch&timezone=America%2FNew_York`
+   - Verify parameter names against the Open-Meteo docs.
+3. **Open-Meteo air quality:** `GET https://air-quality-api.open-meteo.com/v1/air-quality?latitude={lat}&longitude={lon}&current=us_aqi,pm2_5,pm10,ozone&timezone=America%2FNew_York` (no key).
+
+### Caching
+- The cache key is `f"{round(lat,2)},{round(lon,2)}"` (about 1 km).
+- Store the combined result in `hazard_cache` with `fetched_at`.
+- If a source fails, return the partial result with `sources_failed: [...]`. Never 500 the whole call.
+
+### NWS event → hazard type mapping (case-insensitive substring match)
+
+| Match | type |
+|---|---|
+| Tornado | `tornado` |
+| Severe Thunderstorm | `severe_storm` |
+| Flash Flood, Flood | `flood` |
+| Excessive Heat, Extreme Heat, Heat Advisory | `heat` |
+| Air Quality, Dense Smoke | `air_quality` |
+| Winter Storm, Ice Storm, Winter Weather, Freeze, Cold | `winter` |
+| Hurricane, Tropical Storm | `tropical` |
+| High Wind, Wind Advisory | `wind` |
+| anything else | `other` |
+
+**NWS severity → level:** Extreme → 3, Severe → 3, Moderate → 2, Minor → 1, Unknown → 1.
+
+### Derived signals (from `backend/app/hazard_thresholds.yaml`, with a source comment per value)
+
+| Signal | Threshold | Level | Source note |
+|---|---|---|---|
+| US AQI | 101–150 | 1 | EPA AQI category "Unhealthy for Sensitive Groups" |
+| US AQI | 151–200 | 2 | EPA "Unhealthy" |
+| US AQI | > 200 | 2 (derived cap) | EPA "Very Unhealthy"/"Hazardous" |
+| Wind gust (current or next 12 h) | ≥ 58 mph | 2 | NWS severe thunderstorm wind criterion |
+| Apparent temp | ≥ 103 °F | 1 | **Team-chosen elevated threshold, not an NWS criterion.** Heat advisories come from NWS alerts |
+| Precip next 12 h | ≥ 2.0 in | 1 | **Team-chosen, editable** |
+
+### Output
+```json
+{
+  "level": 0-3,                        // max over all hazards
+  "hazards": [
+    {"type": "severe_storm", "level": 3, "source": "NWS", "official": true,
+     "event": "Severe Thunderstorm Warning", "headline": "...", "expires": "ISO", "instruction": "..."},
+    {"type": "air_quality", "level": 2, "source": "Open-Meteo", "official": false,
+     "value": 158, "unit": "US AQI", "category": "Unhealthy"}
+  ],
+  "likely_needs": ["power", "debris", "respiratory"],
+  "current": {"apparent_temperature_f": 88, "wind_gust_mph": 22, "us_aqi": 158, "pm2_5": 61},
+  "simulated": false,
+  "sources_failed": [],
+  "fetched_at": "ISO"
+}
+```
+
+### Hazard → likely needs (used for requester quick-pick chips and helper prep)
+
+| type | likely_needs |
+|---|---|
+| tornado, severe_storm, wind | `debris`, `power`, `shelter`, `supplies` |
+| flood | `transport`, `supplies`, `shelter` |
+| heat | `water`, `cooling`, `welfare_check`, `transport` |
+| air_quality | `respiratory`, `supplies` (masks), `welfare_check` |
+| winter | `warming`, `power`, `supplies` |
+| tropical | union of storm and flood |
+
+### Simulation mode (`routers/sim.py`, coordinator only)
+- `GET /api/sim`, `POST /api/sim/activate {scenario_id}`, `POST /api/sim/deactivate`. State lives in `settings` doc `{_id: "sim", active, scenario_id, activated_at}`.
+- Scenarios live in `backend/app/scenarios/*.json`. Each file is a list of hazard objects in the output shape above, plus optional `current` overrides.
+- The team may replace the synthetic content with a real archived NWS alert. Every scenario file must include `"label": "SIMULATED"`, and its text must not claim to be a live alert.
+- Starter scenario: `atl_storm_smoke.json`, a severe thunderstorm warning (level 3) plus AQI 158 (level 2) around the venue.
+- While the simulation is active, `get_hazards()` merges scenario hazards into real results and sets `simulated: true`. **The UI must show a persistent "SIMULATED SCENARIO" badge whenever `simulated` is true.**
+- Activating or deactivating broadcasts `hazard.updated` over WebSocket.
+
+**Endpoints:**
+- `GET /api/hazards?lat=&lon=`
+- `GET /api/hazards/region` (coordinator: GA active alerts, normalized, with their geometry if present)
+
+---
+
+## 8. Component: AI layer (`app/ai/`)
+
+**Libraries:** `httpx`, `pydantic` (output validation).
+
+### Provider interface
+```python
+class LLMProvider(Protocol):
+    async def complete_json(self, system: str, user: str, schema: type[BaseModel], temperature: float = 0.2) -> BaseModel: ...
+    async def complete_text(self, system: str, user: str, temperature: float = 0.3) -> str: ...
+```
+- **`MuseProvider` [HUMAN]:** implement **only** from `docs/muse-api.md`. Do not invent endpoints, auth headers, or model IDs. If the docs show an OpenAI-compatible chat API, use that format; otherwise follow the docs exactly.
+- **`MockProvider`:** deterministic keyword-based outputs so the whole app works with no API key. Used in tests and when `LLM_PROVIDER=mock`.
+- **JSON handling:** ask for JSON only, strip code fences, and validate with pydantic. On failure, retry once with the validation error appended. On a second failure, raise `TriageFallback` so the caller uses rules-only output.
+
+### Uses (all prompts in `prompts.py`)
+1. **Triage**, called on request preview and create (§9.2).
+2. **Match reason:** one sentence explaining why a helper fits, generated from computed fields only. Template fallback: `"{name} is {dist} away and has {resource}."`
+3. **Helper safety notes:** 2–3 bullet points, given the category, hazards, and the fixed safety rules below. Always append these fixed lines regardless of LLM output:
+   - flood: "Never drive or walk through floodwater."
+   - power / debris: "Stay away from downed power lines; assume they are live."
+   - any: "If anyone's life is in danger, call 911."
+4. **Translation:** `translate(text, target_lang)` for chat messages and TTS confirmations. Skip the call if the language already matches.
+5. **Coordinator situation summary:** the input is a JSON stats object computed by Mongo aggregation (§11). The prompt must say: use only the numbers provided; do not invent figures. Output is 3–5 sentences. Regenerate at most once per 60 s (cache in memory).
+
+---
+
+## 9. Component: Requests (core workflow)
+
+### 9.1 Data model (`requests` collection)
+```js
+{
+  _id, requester_id,
+  raw_text, transcript?, language,
+  category,               // enum below
+  urgency,                // 1-5 final
+  urgency_rule_floor,     // 1-5 from rules
+  emergency: bool,        // life-threatening keywords hit
+  flags: [],              // medical_device, mobility, elderly, lives_alone, infant, language_barrier
+  needs: [],              // short strings
+  summary,                // one line, AI or fallback
+  location: GeoJSON Point,          // exact, NEVER sent to unauthorized viewers
+  display_location: GeoJSON Point,  // fuzzed
+  tract_geoid, eji_rank,            // eji_rank may be null
+  hazard_snapshot: {...}, hazard_level,
+  priority, priority_breakdown: {urgency, hazard, eji, wait, weights},
+  status,                 // enum below
+  helper_id?, claimed_at?, resolved_at?,
+  safety_notes: [],
+  timeline: [{status, at, by}],
+  created_at, updated_at
+}
+```
+
+- **Categories:** `power`, `water`, `food`, `medical_supplies`, `transport`, `shelter`, `cooling`, `warming`, `debris`, `respiratory`, `welfare_check`, `supplies`, `other`.
+- **Statuses:** `OPEN`, `CLAIMED`, `EN_ROUTE`, `ON_SITE`, `RESOLVED`, `ESCALATED`, `CANCELLED`.
+
+### 9.2 Triage pipeline (`services/triage.py`, `services/rules.py`)
+1. **Rules first** (English and Spanish keyword and regex lists in `rules.py`):
+   - `EMERGENCY` terms (can't breathe / no puedo respirar, chest pain, unconscious, trapped, bleeding heavily, water rising inside, fire) set `emergency=true` and `urgency_rule_floor=5`.
+   - `HIGH` terms (oxygen, concentrator, dialysis, insulin, ventilator, wheelchair, bedridden, infant/baby, elderly alone) set floor 4 and add the matching flags.
+   - Otherwise the floor is 1.
+   - The user's stored `requester_flags` also raise the floor: `medical_device` → 4; `mobility` or `lives_alone` → 3.
+2. **LLM** (`complete_json` with the `TriageOutput` schema: `category, urgency 1-5, flags[], needs[], summary, language`). The input is text plus active hazard types.
+3. **Merge:**
+   - `urgency = max(rule_floor, llm_urgency)`. **The LLM can never lower urgency.**
+   - `flags = union`.
+   - If the LLM failed: `category = first rule-matched category` or `other`, `summary = raw_text[:120]`.
+4. **Two-step UX:**
+   - `POST /api/requests/preview {text, lat, lon}` returns the triage + `emergency` + suggested category without saving anything.
+   - `POST /api/requests {text, transcript?, lat, lon, category_override?}` saves. `category_override` may change the category but **not** lower urgency.
+5. **If `emergency`:**
+   - the API response includes `show_911: true`;
+   - the frontend shows a full-screen "Call 911 now" interstitial with a `tel:911` button **before** it confirms submission;
+   - the request is still saved (urgency 5) so community helpers can assist.
+
+### 9.3 On create, in order
+1. Triage (above).
+2. `tract_for_point` → `tract_geoid`, `eji_rank` (null if outside Georgia).
+3. `get_hazards(lat, lon)` → `hazard_snapshot`, `hazard_level`.
+4. `display_location = fuzz(location, request_id)` (§9.5).
+5. `priority` and `priority_breakdown` (§9.4).
+6. `safety_notes` (AI + fixed lines).
+7. Insert with `status=OPEN` and a timeline entry.
+8. The response includes a `confirmation_text` translated to the requester's language, which the frontend sends to `/api/voice/speak`.
+
+### 9.4 Priority (`services/priority.py`)
+```
+u = (urgency - 1) / 4
+h = hazard_level / 3
+e = eji_rank if not null else 0.5        # breakdown marks "eji_missing": true
+w = min(minutes_since_created / 60, 1)   # only while OPEN
+priority = W_u*u + W_h*h + W_e*e + W_w*w
+defaults: W_u=0.45, W_h=0.20, W_e=0.20, W_w=0.15
+```
+- Weights live in `settings {_id: "weights"}`. `GET/PUT /api/coordinator/weights`; PUT validates non-negative values and normalizes the sum to 1.
+- **Wait time changes over time, so recompute priority at read time** in the feed endpoint, in Python after the query. Persist the stored `priority` on create and on status change.
+- `priority_breakdown` includes each raw value, normalized value, weight, contribution, and source label. The UI's "Why this rank?" panel uses it.
+- Weights are **designed defaults, not fitted**. The UI and docs must say so.
+
+### 9.5 Location fuzzing (`services/fuzz.py`)
+- Deterministic: seed a PRNG with `request_id`. Pick a random bearing and a distance of 300–500 m, and offset the point. The same request always produces the same fuzzed point.
+
+### 9.6 Viewer-aware serialization (`services/serialize.py`), mandatory
+`serialize_request(req, viewer)` returns:
+
+| Viewer | Exact `location` | `requester_flags` / name / phone | Chat |
+|---|---|---|---|
+| The requester | yes | own | yes |
+| Assigned helper (status CLAIMED or later, not CANCELLED) | yes | yes | yes |
+| Other helpers | **no** (only `display_location`) | no (category, urgency, summary, needs only) | no |
+| Coordinator | **no** (display_location) | no | no |
+
+**Every endpoint and WebSocket event that emits a request must go through this function.** Write tests for each row.
+
+### 9.7 State machine (`services/state.py`)
+```
+OPEN      → CLAIMED (helper claim) | CANCELLED (requester)
+CLAIMED   → EN_ROUTE (helper) | OPEN (helper release) | ESCALATED (helper) | CANCELLED (requester)
+EN_ROUTE  → ON_SITE (helper) | OPEN (release) | ESCALATED | CANCELLED (requester)
+ON_SITE   → RESOLVED (helper or requester) | ESCALATED
+ESCALATED → OPEN (coordinator) | RESOLVED (coordinator)
+```
+- Invalid transitions return 409 `INVALID_TRANSITION`.
+- Every transition appends to `timeline` and sets `updated_at`.
+- A release clears `helper_id` and `claimed_at`.
+
+**Claim is atomic:**
+```python
+find_one_and_update({"_id": id, "status": "OPEN"},
+                    {"$set": {"status": "CLAIMED", "helper_id": uid, "claimed_at": now}, "$push": {...}})
+```
+- A `None` result means 409 `ALREADY_CLAIMED`.
+- Unverified helpers cannot claim requests with `urgency >= 4` (403 `VERIFICATION_REQUIRED`).
+- A helper can have at most **2** active claims.
+
+### 9.8 Request endpoints
+
+| Method | Path | Who | Notes |
+|---|---|---|---|
+| POST | `/api/requests/preview` | requester | no save |
+| POST | `/api/requests` | requester | max 1 active (non-terminal) request per requester → 409 |
+| GET | `/api/requests/mine` | requester | active + recent |
+| GET | `/api/requests/feed?lat&lon` | helper | OPEN requests within `radius_km` via `$geoNear` on `display_location`, priority recomputed, sorted desc, limit 50 |
+| GET | `/api/requests/{id}` | per serialize rules | |
+| POST | `/api/requests/{id}/claim` | helper | |
+| POST | `/api/requests/{id}/status {status}` | per state machine | |
+| POST | `/api/requests/{id}/release` | assigned helper | |
+| POST | `/api/requests/{id}/escalate {reason}` | assigned helper | |
+| POST | `/api/requests/{id}/cancel` | requester | |
+| GET | `/api/requests/{id}/matches` | requester, coordinator | top 3 helpers + reasons |
+| GET/POST | `/api/requests/{id}/messages` | requester, assigned helper | |
+
+### 9.9 Matching (`services/matching.py`)
+1. **Candidates:** `presence` docs with `role=helper`, joined to users with `on_duty=true` and no more than 1 active claim, found via `$geoNear` from the request location. Limit 20.
+2. **Keep** those with distance ≤ min(helper `radius_km`, 15 km).
+3. **Score each:**
+   ```
+   score = 0.40*dist_score + 0.35*skill_fit + 0.15*resource_fit + 0.10*verified
+   dist_score = 1 - d/max_d
+   ```
+4. **Category → required skills and resources:**
+   - power → generator | power_bank, electrical_safe
+   - debris → chainsaw, heavy_lifting, truck
+   - transport → vehicle, driving
+   - medical_supplies → medical_kit, first_aid | nursing
+   - respiratory → n95_masks
+   - cooling → ac_space, vehicle
+   - water → water, vehicle
+   - welfare_check → any
+   - (add the rest sensibly)
+
+   A language match counts as a skill match when the requester's language is not `en`.
+5. Top 3 get an AI match reason, with the template fallback.
+
+### 9.10 Messages
+- `{_id, request_id, from_user_id, text, lang, translated_text?, target_lang?, ts}`.
+- On POST, if the recipient's language differs, translate the text and store both. Broadcast `chat.message`.
+
+---
+
+## 10. Component: Realtime (WebSocket + live location)
+
+**Backend libraries:** FastAPI WebSockets and Mongo change streams (Atlas replica set).
+
+**Endpoint:** `GET /ws` (upgrade).
+- Authenticate from the `session` cookie. Close with code 4401 if the cookie is invalid.
+- In local dev, Vite proxies `/ws` with `ws: true`.
+
+**`ConnectionManager`** (in-memory; a single process is fine):
+- `connections: dict[user_id, set[WebSocket]]`
+- `request_rooms: dict[request_id, set[user_id]]`. Join automatically on connect for the user's active request(s). Update on claim, release, or cancel.
+- Helper area subscriptions come from each helper's latest presence location and `radius_km`.
+
+**Client → server messages:**
+```json
+{"type": "location", "lat": 33.77, "lon": -84.39, "accuracy": 12}
+{"type": "ping"}
+```
+- On `location`: upsert `presence {user_id, role, location, request_id?, updated_at: now}`.
+- Accept only if the user is an on-duty helper or a requester with an active request; otherwise ignore.
+- If the user is in a request room, broadcast `location.update {user_id, role, lat, lon}` to the **other party in that room only**.
+- Rate limit: drop updates that arrive less than 5 s after the previous one from the same user.
+
+**Server → client events:**
+
+| Event | Payload | Recipients |
+|---|---|---|
+| `request.created` | serialized request (helper view) | on-duty helpers whose radius contains it |
+| `request.updated` | serialized per recipient | request room + helpers whose feeds contain it + coordinators |
+| `location.update` | `{user_id, role, lat, lon}` | other party in room |
+| `chat.message` | message | request room |
+| `hazard.updated` | `{simulated, region_level}` | everyone |
+| `summary.updated` | `{text, stats}` | coordinators |
+| `pong` | — | sender |
+
+**Change-stream broadcaster:**
+1. A lifespan task runs `db.requests.watch(full_document="updateLookup")`.
+2. For each insert or update, it computes recipients and emits `request.created` or `request.updated`. Payloads are always serialized per recipient.
+3. It wraps the loop in retry with backoff.
+4. **Fallback:** if `REALTIME_MODE=poll`, the frontend polls the REST endpoints every 5 s instead. Implement polling first; add WebSockets after milestone M3.
+
+**Frontend (`src/realtime/`):**
+- `RealtimeProvider` opens `wss://<host>/ws` (or `ws://` in dev).
+- It reconnects with exponential backoff (1 s → 30 s) and sends `ping` every 25 s.
+- Incoming events update the TanStack Query cache via `queryClient.setQueryData` / `invalidateQueries`.
+- **`useGeolocationStream(enabled)`:**
+  - uses `navigator.geolocation.watchPosition({enableHighAccuracy: true, maximumAge: 10000})`;
+  - sends at most every 10 s, or when moved > 25 m (haversine);
+  - is enabled only for on-duty helpers and for requesters with an active request.
+- Geolocation and the microphone require HTTPS; `localhost` is exempt.
+
+---
+
+## 11. Component: Coordinator features
+
+**Endpoints (coordinator role):**
+- `GET /api/coordinator/stats`: a Mongo aggregation returning:
+  - counts by status and by category;
+  - unclaimed counts with urgency ≥ 4, and the oldest unclaimed wait in minutes;
+  - requests per tract, with `eji_rank`;
+  - the count of requests in tracts where EJI ≥ 0.9;
+  - the count of active helpers from presence.
+- `GET /api/coordinator/summary`: AI summary from the stats JSON, cached 60 s.
+- `GET/PUT /api/coordinator/weights`.
+- `POST /api/coordinator/verify/{user_id}`.
+- `GET /api/tracts?bbox=minLon,minLat,maxLon,maxLat`: tracts GeoJSON for the choropleth via `$geoIntersects` with a bbox polygon. Limit fields to `geoid` and ranks.
+- Sim endpoints (§7).
+
+---
+
+## 12. Component: Voice
+
+### Transcription (Meta: Muse Voice Transcribe) [HUMAN docs]
+- `POST /api/voice/transcribe` takes multipart `audio` and returns `{text, language?}`.
+- `services/transcribe.py` calls Muse Voice Transcribe **per `docs/muse-api.md` only**.
+- Accept `audio/webm` (Chrome/Android) and `audio/mp4` (Safari/iOS). Convert with `ffmpeg` in the backend container **only if** Muse needs a specific format.
+- Max 60 s and 10 MB.
+- **Fallback chain:**
+  1. if Muse is not configured, return 503 `TRANSCRIBE_UNAVAILABLE`;
+  2. the frontend then offers the browser Web Speech API (where supported);
+  3. then typed input.
+
+### Text-to-speech (ElevenLabs)
+- `POST /api/voice/speak {text, language}` returns `audio/mpeg`.
+- `services/tts.py` calls ElevenLabs text-to-speech. Expected REST shape (**verify against current ElevenLabs docs**):
+  - `POST https://api.elevenlabs.io/v1/text-to-speech/{ELEVENLABS_VOICE_ID}`
+  - header `xi-api-key`
+  - body `{text, model_id: ELEVENLABS_MODEL_ID}`
+- Use a multilingual model so Spanish works.
+- Cache audio on disk at `backend/media/tts/{sha256(text+voice+model)}.mp3`. Max text length 500 chars.
+- **Where it's used:**
+  - request confirmation;
+  - status changes the requester receives ("Marcus is on the way, about 9 minutes");
+  - hazard banner read-aloud button.
+
+**Frontend:**
+- `VoiceRecorder` uses `MediaRecorder` and picks the first supported mime type from `['audio/webm;codecs=opus','audio/webm','audio/mp4']`.
+- It is hold-to-record with a visible timer.
+- It sends the recording to `/transcribe`, then shows editable text before preview.
+- `useAudioPlayer` plays returned blobs. Show a "Tap to hear" button, because iOS blocks autoplay.
+
+---
+
+## 13. Component: Frontend (Vite + React + TS)
+
+**Libraries:**
+- `react`, `react-dom`, `react-router-dom`, `@tanstack/react-query`;
+- `@react-oauth/google`;
+- `leaflet`, `react-leaflet` (OpenStreetMap tiles with the required attribution);
+- `tailwindcss`;
+- `zod` (optional, for response validation);
+- `date-fns`.
+
+Mobile-first; test at 375 px width.
+
+**`vite.config.ts`** dev proxy:
+```ts
+server: { proxy: { '/api': 'http://localhost:8000', '/ws': { target: 'ws://localhost:8000', ws: true } } }
+```
+
+**Routing and guards:**
+- `AuthGuard` loads `/api/me`: 401 → `/login`; role null → `/onboarding`.
+- `RoleGuard` redirects to the role's home.
+- `fetch` wrapper always uses `credentials: 'include'`, parses the error format, and turns 401 into a logout redirect.
+
+**Pages:**
+
+| Route | Role | Contents |
+|---|---|---|
+| `/login` | public | Google button; if `VITE_DEMO_LOGIN`, a "Demo login" dropdown of seeded users |
+| `/onboarding` | any authed | role cards (requester / helper; coordinator requires code), profile form, home location (map pin or address via `/api/geocode`), role-specific fields |
+| `/r` | requester | `HazardBanner` (with read-aloud); big "Get help" button; active request card with status timeline, map showing own location + assigned helper live dot, chat, "Tap to hear" updates; nearby resources list |
+| `/r/new` | requester | quick-pick chips from `likely_needs`; `VoiceRecorder` or textarea; Preview → triage card (category editable, urgency shown); 911 interstitial if `emergency`; Submit → plays confirmation audio |
+| `/h` | helper | on-duty toggle (starts location stream); map of fuzzed request circles colored by priority; ranked list; `HazardBanner` |
+| `/h/req/:id` | helper | summary, needs, flags (after claim), `PriorityBreakdown` ("Why this rank?"), safety notes, Claim button; after claim: exact pin, "Open in Google Maps" directions link (`https://www.google.com/maps/dir/?api=1&destination=lat,lon`), status buttons, release/escalate, chat, requester live dot |
+| `/c` | coordinator | map with EJI choropleth (tract fill by `eji_rank`), request markers, active alerts; stats cards; AI summary (auto-refresh); weight sliders (PUT on release); sim toggle + scenario picker; persistent SIMULATED badge |
+| `/settings` | any | profile edit, role switch, logout |
+
+**Shared components:**
+- `MapView`
+- `RequestMarker`
+- `HelperDot`
+- `HazardBanner` (level colors 0 gray, 1 yellow, 2 orange, 3 red; source tags "NWS (official)" / "Open-Meteo (derived)")
+- `SimulatedBadge`
+- `PriorityBreakdown` (bar per factor, value, weight, source; footer "Weights are designed defaults, not fitted")
+- `StatusTimeline`
+- `ChatPanel` (shows the original and translated text)
+- `VoiceRecorder`
+- `EmergencyInterstitial`
+- `ResourceList`
+
+**Types:** `src/lib/types.ts` mirrors the pydantic models exactly. Keep them in sync.
+
+---
+
+## 14. Rules for Claude Code (non-negotiable)
+
+1. **Don't invent API specs.** For Muse, only implement from `docs/muse-api.md`. For ElevenLabs, Open-Meteo, NWS, and the Census geocoder, follow this plan, and if a response shape differs, adapt the parser and note it. Don't fabricate fields.
+2. **Don't invent data.**
+   - EJI column names come from the data dictionary.
+   - Shelter, cooling-center, and charging locations in `resources` are **[HUMAN]**-supplied. Seed data may use obviously fake names ("Demo Community Center A") at plausible coordinates, flagged `demo: true`.
+   - Never present fake resources as real.
+3. **Numbers come from code, not the LLM.** The LLM may classify, explain, translate, and summarize given numbers. It never produces priority, hazard levels, distances, counts, or EJI values.
+4. **The LLM can never lower urgency** below the rules floor.
+5. **Location privacy:** every request that leaves the backend goes through `serialize_request`. Tests must cover each viewer row.
+6. **Emergency path:** emergency keywords always trigger the 911 interstitial, even when the LLM is down.
+7. **Simulation is always labeled** in the UI and in API responses.
+8. **No secrets in code or git.** Use `.env` only.
+9. **`DEMO_LOGIN` endpoints return 404** unless the flag is true.
+10. **Stay in scope.** No features beyond this plan without team approval. Mark stretch items as stretch.
+11. Keep the app working with `LLM_PROVIDER=mock` and no ElevenLabs key: graceful degradation everywhere.
+
+---
+
+## 15. Seed script (`backend/app/seed.py`)
+
+`python -m app.seed --reset` does the following:
+- Deletes only documents flagged `demo: true`.
+- Creates:
+  - **8 helpers** within 3 km of (33.7756, -84.3963):
+    - varied skills and resources (at least one with a generator, one Spanish speaker, one with a truck + chainsaw, one nurse);
+    - 6 verified and 2 unverified;
+    - all on duty, with presence docs (refresh `updated_at` so TTL doesn't expire them; add `--keepalive` to refresh every 60 s during the demo).
+  - **12 requesters with 12 OPEN requests** across categories and urgencies, including one Spanish-language medical-device power request. Triage runs through the normal pipeline (MockProvider is fine).
+  - **1 coordinator.**
+  - **4 demo resources** (fake names, `demo: true`).
+- All seeded users use `google_sub: "demo-<n>"` and are available through demo login.
+
+---
+
+## 16. Deployment (Vultr + Caddy + .tech)
+
+**`docker-compose.yml`:**
+- `backend`: build `./backend`; command `uvicorn app.main:app --host 0.0.0.0 --port 8000`; `env_file: .env`; volume for `backend/media`.
+- `caddy`: image `caddy:2`; ports 80 and 443; mounts `./deploy/Caddyfile` and `./frontend/dist:/srv`; volumes for Caddy data and config (certificates).
+
+**`deploy/Caddyfile`:**
+```
+<domain>.tech {
+    encode gzip
+    handle /api/* { reverse_proxy backend:8000 }
+    handle /ws { reverse_proxy backend:8000 }
+    handle {
+        root * /srv
+        try_files {path} /index.html
+        file_server
+    }
+}
+```
+
+**Steps [HUMAN where noted]:**
+1. Create a Vultr Ubuntu VM (smallest plan is fine). Install Docker and the compose plugin. Open ports 80 and 443 in the firewall.
+2. **[HUMAN]** Register the .tech domain and point an A record (`@`) at the VM's IP.
+3. **[HUMAN]** In Atlas Network Access, allow the VM's IP.
+4. Build the frontend (`npm ci && npm run build`) with the production `VITE_*` env vars. `docker compose up -d --build`. Caddy obtains HTTPS certificates automatically.
+5. Set `COOKIE_SECURE=true` and `DEMO_LOGIN` as desired. Add the production origin to the Google OAuth client.
+6. **Smoke test on a real phone over cellular:** login, microphone, geolocation, WebSocket connection, audio playback.
+
+---
+
+## 17. Testing
+
+**Backend (pytest):**
+- state machine (all valid and invalid transitions);
+- atomic claim (race between two helpers → one 409);
+- verified-claim rule;
+- priority math and weight normalization;
+- rules floor (EN and ES), with the LLM unable to lower urgency;
+- fuzz determinism and a 300–500 m distance range;
+- `serialize_request` for every viewer row;
+- hazard mapping and threshold levels (using fixture JSON for NWS and Open-Meteo);
+- `DEMO_LOGIN` 404 when off.
+
+**Manual end-to-end checklist (three browsers or phones: requester, helper, coordinator):**
+1. Google login → onboarding for each role.
+2. Coordinator activates the simulation → banners update everywhere with the SIMULATED badge.
+3. Requester records a Spanish voice request → transcript → preview → submit → confirmation audio.
+4. The helper feed shows it at the top with a breakdown → claim → exact pin appears → EN_ROUTE → requester sees the live helper dot and hears the status audio.
+5. Translated chat both ways.
+6. ON_SITE → RESOLVED; the coordinator summary updates.
+7. An emergency phrase triggers the 911 interstitial with `LLM_PROVIDER=mock`.
+
+---
+
+## 18. Milestones (build order)
+
+Times assume a Sunday ~9 AM ET deadline. **[HUMAN] Confirm the real cutoff.**
+
+| # | Target | Deliverable | Done when |
+|---|---|---|---|
+| M0 | Sat 3 PM | Repo scaffold, `.env.example`, Vite + FastAPI running, dev proxy, Mongo connection, indexes, `/api/health` | health returns `db: ok` |
+| M1 | Sat 5 PM | Google auth + JWT cookie + onboarding + guards + demo login; `data/` pipeline loads GA tracts | login → onboarding → role home works; `tract_for_point` returns the venue tract |
+| M2 | Sat 7 PM | Hazards service (NWS + Open-Meteo + AQ + cache) + sim mode; requests create (rules-only triage), feed, claim, status, fuzzing, serialization; frontend requester and helper flows with **polling** | **Checkpoint 1:** request → helper feed → claim → status visible to requester |
+| M3 | Sat 11 PM | AI layer (Muse or mock), triage merge, priority + breakdown UI, matching + reasons, safety notes, voice transcribe + ElevenLabs TTS, 911 interstitial, seed script | **Checkpoint 2:** full demo path works locally |
+| M4 | Sun 1 AM | WebSocket realtime + live location + change streams; Vultr deploy with HTTPS on the domain | works on phones over HTTPS |
+| M5 | Sun 5 AM | Coordinator dashboard (choropleth, stats, AI summary, weight sliders), chat translation, polish | — |
+| Freeze | Sun 6 AM | Bug fixes only | — |
+| Submit | Sun 8:30 AM | Meta video recorded (problem 30 s / demo 90 s / AI role 30 s / tools 30 s), Devpost with one section per prize | submitted |
+
+**If behind schedule, cut in this order:**
+1. coordinator weight sliders;
+2. chat translation;
+3. change streams (keep WebSocket for location only, poll requests);
+4. coordinator dashboard (keep only the sim toggle).
+
+**Never cut:** auth, the request lifecycle, the hazard banner, AI triage, the 911 path, the privacy serializer, or sim mode.
+
+---
+
+## 19. How the components work together (end-to-end)
+
+1. **Sign-in:** Google button → ID token → `/api/auth/google` verifies it → Mongo `users` upsert → JWT cookie → onboarding sets role and profile → role home.
+2. **Hazard context:** the page loads → `/api/hazards?lat&lon` → cache check → NWS alerts + Open-Meteo forecast + AQ in parallel → normalized levels + `likely_needs` → banner and quick-pick chips. A coordinator's sim toggle merges the scenario and broadcasts `hazard.updated`.
+3. **Request:**
+   1. voice → MediaRecorder → `/api/voice/transcribe` (Muse) → text;
+   2. `/api/requests/preview` → rules floor + Muse triage → merged urgency;
+   3. 911 interstitial if needed;
+   4. `/api/requests` → tract lookup (`$geoIntersects`) + EJI rank + hazard snapshot + fuzz + priority → insert;
+   5. confirmation → `/api/voice/speak` (ElevenLabs) → audio.
+4. **Dispatch:**
+   1. the change stream sees the insert → `request.created` to on-duty helpers in radius (helper view, fuzzed);
+   2. the helper feed re-ranks with live wait time;
+   3. the helper opens the detail → breakdown + match reason + safety notes → atomic claim → room joined → exact location unlocked for that helper only.
+5. **En route:** the helper's phone streams location over `/ws` → `presence` upsert (TTL) → `location.update` to the requester only. Status changes trigger `request.updated` + a spoken update for the requester. Chat is translated between languages.
+6. **Oversight:** the coordinator sees stats (Mongo aggregation) + AI summary (numbers from the aggregation only) + the EJI choropleth. The coordinator can adjust priority weights, verify helpers, and handle escalations.
+
+---
+
+## 20. Open items for the team [HUMAN]
+
+- [ ] Confirm HackGT 13 submission deadline and Devpost requirements.
+- [ ] Paste Muse Spark and Muse Voice Transcribe API docs into `docs/muse-api.md`; redeem $50 credits (each teammate).
+- [ ] Create the Google OAuth client; add test users.
+- [ ] Get the ElevenLabs API key; choose a multilingual voice ID.
+- [ ] Create the Atlas cluster and user; allow the Vultr IP.
+- [ ] Register the .tech domain; create the Vultr VM.
+- [ ] Download the EJI 2024 CSV and GA TIGER tracts into `data/raw/`; fill `eji_columns.yaml` from the data dictionary.
+- [ ] (Optional) Supply real Atlanta shelter or cooling-center locations with sources.
+- [ ] Set the NWS User-Agent contact email and the coordinator invite code.
