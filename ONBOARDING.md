@@ -148,9 +148,22 @@ If we fall behind, cut in PLAN.md §18 order: weight sliders → chat translatio
 ## Part 3: Working together
 
 ### Git workflow
-- Branch per task: `a/auth`, `b/state-machine`, `c/onboarding`, `d/hazards`. Never push directly to `main`.
-- Open small PRs. Before merging: `pytest -q` and `npm run typecheck` pass, and one teammate glances at it (a 2-minute review is fine).
-- Pull or rebase on `main` at least every hour. Merge early; long-lived branches hurt.
+- Each lane has its own branch off `main`:
+
+  | Lane | Branch |
+  |---|---|
+  | A: Platform | `lane/a-platform` |
+  | B: Requests core | `lane/b-requests` |
+  | C: Requester & helper UI | `lane/c-ui` |
+  | D: Hazards, AI & data | `lane/d-hazards-ai` |
+
+  ```bash
+  git fetch origin
+  git switch lane/b-requests        # your lane's branch
+  ```
+- Commit to your lane branch and push often. Never push directly to `main`.
+- **Merge into `main` via PR whenever a task works**, and at the latest at every sync point. Before merging: `pytest -q` and `npm run typecheck` pass, and one teammate glances at it (a 2-minute review is fine). Lane B's `models.py` PR (B1) should merge as soon as it's ready, since everyone builds on it.
+- After anything merges to `main`, update your lane branch: `git pull origin main` (or `git rebase origin/main` if you prefer). Lane branches that drift from `main` for hours cause painful merges.
 
 ### Shared files (where conflicts happen)
 | File | Rule |
