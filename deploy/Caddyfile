@@ -1,5 +1,4 @@
-# TODO(HUMAN): replace <domain> with the registered .tech domain (PLAN.md §16).
-<domain>.tech {
+mesh-together.tech {
 	encode gzip
 	handle /api/* {
 		reverse_proxy backend:8000
