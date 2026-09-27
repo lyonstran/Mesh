@@ -49,7 +49,7 @@ npm run dev                       # http://localhost:5173
 
 ### 6. Verify
 - [ ] http://localhost:5173/api/health shows `"db": "ok"`. It also shows `vector_search`: `atlas` on our Atlas cluster, `local` otherwise.
-- [ ] `cd backend && pytest -q` passes. To also run the 12 database tests, set `MONGODB_TEST_URI` to a MongoDB URI (Atlas is fine); they create and drop their own `mesh_test_*` databases.
+- [ ] `cd backend && pytest -q` passes. To also run the database tests, set `MONGODB_TEST_URI` to a MongoDB URI (the dev Atlas URI is fine). Each test uses its own `mesh_test_*` database and drops its collections afterwards (the Atlas role cannot `dropDatabase`).
 - [ ] `cd frontend && npm run typecheck && npm run lint` passes.
 
 If the database shows `error`, the usual cause is that your IP isn't allowed in Atlas or `MONGODB_URI` is wrong. The backend log shows the exact error.

@@ -36,12 +36,14 @@ Priority combines AI triage, live hazards (NWS + Open-Meteo), and CDC EJI tract 
 # backend (from backend/)
 pip install -r requirements-dev.txt    # runtime deps + pytest (Docker image uses requirements.txt)
 uvicorn app.main:app --reload --port 8000
-pytest -q                              # DB tests need MONGODB_TEST_URI (a throwaway DB; skipped if unset)
+pytest -q                              # DB tests need MONGODB_TEST_URI (dev URI is fine: temp mesh_test_* DBs; skipped if unset)
 curl localhost:8000/api/health          # {"ok":true,"db":"ok",...} once MONGODB_URI works
 python -m app.seed --reset            # demo users + requests (flagged demo: true)
 
-# data (from data/)
-python prepare_tracts.py && python load_tracts.py
+# data (from data/; own venv, geopandas stays out of the backend image)
+python -m venv .venv && .venv/Scripts/pip install -r requirements.txt   # .venv/bin/pip on macOS/Linux
+python prepare_tracts.py && python load_tracts.py   # needs raw/ EJI 2024 CSV + tl_2020_13_tract.zip
+pytest -q tests
 
 # frontend (from frontend/)
 npm install

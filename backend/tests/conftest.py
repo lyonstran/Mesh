@@ -102,5 +102,11 @@ def env(monkeypatch) -> Iterator[Env]:
         with TestClient(app) as client:
             yield Env(client, sync[db_name])
     finally:
-        sync.drop_database(db_name)
+        drop_test_db(sync[db_name])
         sync.close()
+
+
+def drop_test_db(db) -> None:
+    """Drop every collection; Mongo removes the empty database. Atlas readWrite roles can't dropDatabase."""
+    for name in db.list_collection_names():
+        db.drop_collection(name)
