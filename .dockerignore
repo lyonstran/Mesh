@@ -1,0 +1,12 @@
+# The Caddy image builds the frontend from the repo root (deploy/Caddy.Dockerfile); keep everything else out of that context.
+.git
+.env
+.env.*
+!.env.example
+backend
+data
+docs
+**/node_modules
+frontend/dist
+**/.venv
+**/__pycache__

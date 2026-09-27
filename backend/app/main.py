@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from app import db
 from app.config import get_settings
 from app.errors import install_error_handlers
-from app.routers import auth, geocode, health, location, messages, requests, users, voice, volunteers
+from app.routers import auth, geocode, hazards, health, location, messages, requests, users, voice, volunteers
 from app.services import ranking
 
 logging.basicConfig(level=logging.INFO)
@@ -28,5 +28,5 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="Mesh API", lifespan=lifespan)
 install_error_handlers(app)
-for module in (health, auth, users, requests, messages, geocode, volunteers, location, voice):
+for module in (health, auth, users, requests, messages, geocode, volunteers, location, hazards, voice):
     app.include_router(module.router)

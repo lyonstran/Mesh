@@ -1,0 +1,149 @@
+{
+ "@context": [
+  "https://geojson.org/geojson-ld/geojson-context.jsonld",
+  {
+   "@version": "1.1",
+   "wx": "https://api.weather.gov/ontology#",
+   "@vocab": "https://api.weather.gov/ontology#"
+  }
+ ],
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.c64c08042f7443e00c91a034ff120d6606a642a2.001.1",
+   "type": "Feature",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -94.68,
+       36.34
+      ],
+      [
+       -94.79,
+       36.16
+      ],
+      [
+       -94.92,
+       36.16
+      ],
+      [
+       -95.44,
+       36.35
+      ],
+      [
+       -95.44,
+       36.38
+      ],
+      [
+       -95.35,
+       36.51
+      ],
+      [
+       -95.33,
+       36.51
+      ],
+      [
+       -95.33,
+       36.54
+      ],
+      [
+       -95.3,
+       36.58
+      ],
+      [
+       -94.68,
+       36.34
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "@id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.c64c08042f7443e00c91a034ff120d6606a642a2.001.1",
+    "@type": "wx:Alert",
+    "id": "urn:oid:2.49.0.1.840.0.c64c08042f7443e00c91a034ff120d6606a642a2.001.1",
+    "areaDesc": "Craig; Mayes; Delaware",
+    "geocode": {
+     "SAME": [
+      "040035",
+      "040097",
+      "040041"
+     ],
+     "UGC": [
+      "OKZ057",
+      "OKZ062",
+      "OKZ063"
+     ]
+    },
+    "affectedZones": [
+     "https://api.weather.gov/zones/forecast/OKZ057",
+     "https://api.weather.gov/zones/forecast/OKZ062",
+     "https://api.weather.gov/zones/forecast/OKZ063"
+    ],
+    "references": [],
+    "sent": "2026-09-27T01:39:00-05:00",
+    "effective": "2026-09-27T01:39:00-05:00",
+    "onset": "2026-09-27T01:39:00-05:00",
+    "expires": "2026-09-27T02:15:00-05:00",
+    "ends": null,
+    "status": "Actual",
+    "messageType": "Alert",
+    "category": "Met",
+    "severity": "Moderate",
+    "certainty": "Observed",
+    "urgency": "Expected",
+    "event": "Special Weather Statement",
+    "sender": "w-nws.webmaster@noaa.gov",
+    "senderName": "NWS Tulsa OK",
+    "headline": "Special Weather Statement issued September 27 at 1:39AM CDT by NWS Tulsa OK",
+    "description": "At 139 AM CDT, Doppler radar indicated a strong thunderstorm over\nHoot Owl, moving southeast at 30 mph.\n\nHAZARD...Wind gusts up to 40 mph and penny size hail.\n\nSOURCE...Radar indicated.\n\nIMPACT...Gusty winds could knock down small tree limbs and blow\naround unsecured objects. Minor hail damage to vegetation\nis possible.\n\nLocations in or near the path include...\nPryor...                          Pryor Creek...\nSalina...                         Langley...\nKansas...                         Adair...\nSpavinaw...                       Oaks...\nBig Cabin...                      Pensacola...\nHoot Owl...                       Rose...\nSpavinaw State Park...            Leach...\nChloeta...                        Twin Oaks...\nStrang...                         Lake Eucha State Park...\nSnowdale State Park...\n\nThis includes Interstate 44 between mile markers 260 and 276.",
+    "instruction": "If outdoors, consider seeking shelter inside a building.",
+    "response": "Execute",
+    "note": null,
+    "parameters": {
+     "AWIPSidentifier": [
+      "SPSTSA"
+     ],
+     "WMOidentifier": [
+      "WWUS84 KTSA 270639"
+     ],
+     "NWSheadline": [
+      "A STRONG THUNDERSTORM WILL IMPACT SOUTH CENTRAL CRAIG... SOUTHWESTERN DELAWARE AND NORTHERN MAYES COUNTIES THROUGH 215 AM CDT"
+     ],
+     "eventMotionDescription": [
+      "2026-09-27T06:39:00-00:00...storm...294DEG...27KT...36.37,-95.12"
+     ],
+     "maxWindGust": [
+      "40 MPH"
+     ],
+     "maxHailSize": [
+      "0.75"
+     ],
+     "BLOCKCHANNEL": [
+      "EAS",
+      "NWEM",
+      "CMAS"
+     ],
+     "EAS-ORG": [
+      "WXR"
+     ]
+    },
+    "scope": "Public",
+    "code": "IPAWSv1.0",
+    "language": "en-US",
+    "web": "http://www.weather.gov",
+    "eventCode": {
+     "SAME": [
+      "SPS"
+     ],
+     "NationalWeatherService": [
+      "SPS"
+     ]
+    }
+   }
+  }
+ ],
+ "title": "Current watches, warnings, and advisories for 36.387 N, 95.126 W",
+ "updated": "2026-09-27T06:48:46+00:00"
+}

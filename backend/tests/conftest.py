@@ -7,13 +7,13 @@ from datetime import UTC, datetime
 
 import pytest
 from fastapi.testclient import TestClient
-from pymongo import MongoClient
+from pymongo import AsyncMongoClient, MongoClient
 
 from app.ai.provider import get_provider
 from app.config import get_settings
 from app.models import Role
 from app.security import COOKIE_NAME, create_token
-from app.services import embeddings, ranking
+from app.services import embeddings, hazards, preview_cache, ranking
 
 
 class FakeEmbedder:
@@ -34,6 +34,23 @@ def _reset_caches() -> None:
     get_settings.cache_clear()
     get_provider.cache_clear()
     ranking.reset()
+    preview_cache.clear()
+
+
+CALM_REPORT = hazards.build_report({"features": []}, {"current": {}, "hourly": {}}, {"current": {}})
+
+
+@pytest.fixture(autouse=True)
+def no_hazard_network(request, monkeypatch) -> None:
+    """Keep API tests off the real NWS/Open-Meteo. test_hazards.py exercises fetching itself with a mock transport.
+    Tests can monkeypatch hazards.fetch_report to return a specific report."""
+    if request.module.__name__.endswith("test_hazards"):
+        return
+
+    async def calm(lat, lon, client=None):
+        return CALM_REPORT
+
+    monkeypatch.setattr(hazards, "fetch_report", calm)
 
 
 @pytest.fixture(autouse=True)
@@ -104,5 +121,28 @@ def env(monkeypatch) -> Iterator[Env]:
         with TestClient(app) as client:
             yield Env(client, sync[db_name])
     finally:
-        sync.drop_database(db_name)
+        drop_test_db(sync[db_name])
         sync.close()
+
+
+def drop_test_db(db) -> None:
+    """Drop every collection; Mongo removes the empty database. Atlas readWrite roles can't dropDatabase."""
+    for name in db.list_collection_names():
+        db.drop_collection(name)
+
+
+@pytest.fixture
+async def async_db():
+    """A throwaway async database for service-level tests (needs MONGODB_TEST_URI)."""
+    uri = os.environ.get("MONGODB_TEST_URI")
+    if not uri:
+        pytest.skip("MONGODB_TEST_URI not set")
+    client = AsyncMongoClient(uri, tz_aware=True)
+    database = client[f"mesh_test_{uuid.uuid4().hex[:8]}"]
+    try:
+        yield database
+    finally:
+        # Atlas readWrite roles can't dropDatabase; an emptied database disappears on its own.
+        for name in await database.list_collection_names():
+            await database.drop_collection(name)
+        await client.close()

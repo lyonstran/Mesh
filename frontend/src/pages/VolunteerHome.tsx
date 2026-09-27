@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ApiError } from '../api/client'
 import { useMe, useMyRequests, useRanked, useRequestAction } from '../api/hooks'
+import HazardBanner from '../components/HazardBanner'
 import { RequestsMap } from '../components/map/lazy'
 import { Button, ErrorText, Loading } from '../components/ui'
 import { stagger } from '../lib/motion'
@@ -124,6 +125,7 @@ export default function VolunteerHome() {
           <span className="text-sm text-ink-soft">{sheetOpen ? 'Show map' : 'Show list'}</span>
         </button>
         <div className={`min-h-0 flex-1 space-y-10 overflow-y-auto px-4 pb-8 lg:block lg:pt-6 ${sheetOpen ? '' : 'hidden'}`}>
+      <HazardBanner point={home} />
       {active.length > 0 && (
         <section>
           <h2 className="text-xl font-extrabold">People you're helping</h2>

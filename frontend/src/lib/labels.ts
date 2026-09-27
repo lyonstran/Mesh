@@ -1,4 +1,4 @@
-import type { Category, RequestStatus, Resource, Skill, TriageFlag } from './types'
+import type { Category, HazardType, RequestStatus, Resource, Skill, TriageFlag } from './types'
 
 export const SKILL_LABELS: Record<Skill, string> = {
   first_aid: 'First aid',
@@ -65,6 +65,25 @@ export const FLAG_LABELS: Record<TriageFlag, string> = {
   lives_alone: 'Lives alone',
   infant: 'Infant',
   language_barrier: 'Language help needed',
+}
+
+export const HAZARD_LABELS: Record<HazardType, string> = {
+  tornado: 'Tornado',
+  severe_storm: 'Severe storm',
+  flood: 'Flooding',
+  heat: 'Heat',
+  air_quality: 'Air quality',
+  winter: 'Winter weather',
+  tropical: 'Tropical storm',
+  wind: 'High wind',
+  other: 'Weather alert',
+}
+
+export const HAZARD_LEVEL_LABELS: Record<number, string> = {
+  0: 'No active hazards',
+  1: 'Minor hazard',
+  2: 'Elevated hazard',
+  3: 'Severe hazard',
 }
 
 export const STATUS_LABELS: Record<RequestStatus, string> = {

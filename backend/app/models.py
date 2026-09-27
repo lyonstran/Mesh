@@ -190,3 +190,34 @@ class RequestCreate(BaseModel):
 
 class MessageCreate(BaseModel):
     text: str = Field(min_length=1, max_length=2000)
+
+
+HazardType = Literal["tornado", "severe_storm", "flood", "heat", "air_quality", "winter", "tropical", "wind", "other"]
+
+
+class Hazard(BaseModel):
+    """One hazard in a hazard report (PLAN.md §7). NWS alerts are official; Open-Meteo signals are derived (level <= 2)."""
+
+    type: HazardType
+    level: int = Field(ge=1, le=3)
+    source: Literal["NWS", "Open-Meteo"]
+    official: bool
+    event: str | None = None  # NWS event name, e.g. "Severe Thunderstorm Warning"
+    headline: str | None = None
+    expires: str | None = None  # ISO
+    instruction: str | None = None
+    value: float | None = None  # derived signals: the reading that crossed the threshold
+    unit: str | None = None
+    category: str | None = None  # e.g. EPA AQI category
+
+
+class HazardReport(BaseModel):
+    """GET /api/hazards (PLAN.md §7). Levels come from code (tables + thresholds), never from the LLM."""
+
+    level: int = Field(ge=0, le=3)  # max over hazards, 0 when there are none
+    hazards: list[Hazard]
+    likely_needs: list[str]
+    current: dict[str, float | None]
+    simulated: bool
+    sources_failed: list[Literal["NWS", "Open-Meteo forecast", "Open-Meteo air quality"]]
+    fetched_at: str  # ISO

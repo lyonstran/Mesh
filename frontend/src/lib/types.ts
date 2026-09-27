@@ -162,10 +162,16 @@ export interface HelpRequest {
   created_at: string
   updated_at: string
   viewer_relation: 'requester' | 'assigned_helper' | 'other'
+  // Triage (null on requests saved before triage existed). Everyone sees these.
+  category: Category | null
+  urgency: number | null // 1-5
+  summary: string | null
+  needs: string[]
   score?: number
   display_location?: LatLon // fuzzed (300-500 m); everyone sees this
   // Only for the requester and the assigned volunteer:
   location?: LatLon // exact
+  flags?: TriageFlag[] // vulnerability flags
   claimed_at?: string | null
   resolved_at?: string | null
   timeline?: TimelineEntry[]
@@ -230,4 +236,41 @@ export interface DemoUser {
   id: string
   name: string | null
   role: Role | null
+}
+
+export type HazardType = 'tornado' | 'severe_storm' | 'flood' | 'heat' | 'air_quality' | 'winter' | 'tropical' | 'wind' | 'other'
+export type HazardSource = 'NWS' | 'Open-Meteo'
+export type HazardSourceName = 'NWS' | 'Open-Meteo forecast' | 'Open-Meteo air quality'
+
+/** One hazard (PLAN.md §7). NWS alerts are official; Open-Meteo signals are derived and capped at level 2. */
+export interface Hazard {
+  type: HazardType
+  level: 1 | 2 | 3
+  source: HazardSource
+  official: boolean
+  event: string | null // NWS event name
+  headline: string | null
+  expires: string | null // ISO
+  instruction: string | null
+  value: number | null // derived: the reading that crossed the threshold
+  unit: string | null
+  category: string | null // e.g. EPA AQI category
+}
+
+/** GET /api/hazards?lat&lon. Levels come from code, never the AI. */
+export interface HazardReport {
+  level: 0 | 1 | 2 | 3
+  hazards: Hazard[]
+  likely_needs: string[]
+  current: {
+    temperature_f?: number | null
+    apparent_temperature_f?: number | null
+    wind_gust_mph?: number | null
+    precip_next_12h_in?: number | null
+    us_aqi?: number | null
+    pm2_5?: number | null
+  }
+  simulated: boolean
+  sources_failed: HazardSourceName[]
+  fetched_at: string // ISO
 }

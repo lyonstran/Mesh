@@ -1,14 +1,39 @@
-mesh-together.tech {
+# The domain comes from SITE_DOMAIN (set in .env, passed through docker-compose.yml). To try the stack on your own
+# machine, set SITE_DOMAIN=localhost and Caddy serves a locally trusted certificate instead of requesting a real one.
+
+{$SITE_DOMAIN:mesh-together.tech} {
 	encode gzip
+
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		# One day for now. Raise it once HTTPS has been stable for a while. Google sign-in needs popups, so no
+		# Cross-Origin-Opener-Policy header is set here.
+		Strict-Transport-Security "max-age=86400"
+		-Server
+	}
+
 	handle /api/* {
 		reverse_proxy backend:8000
 	}
+
 	handle /ws {
 		reverse_proxy backend:8000
 	}
+
 	handle {
 		root * /srv
+		# Hashed build files never change, so cache them hard; the page itself must always be revalidated.
+		@assets path /assets/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+		@shell not path /assets/*
+		header @shell Cache-Control "no-cache"
 		try_files {path} /index.html
 		file_server
 	}
+}
+
+# www redirects to the bare domain. Add an A record for www as well, or delete this block.
+www.{$SITE_DOMAIN:mesh-together.tech} {
+	redir https://{$SITE_DOMAIN:mesh-together.tech}{uri} permanent
 }

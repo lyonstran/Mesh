@@ -1,0 +1,9 @@
+# Offline tract preprocessing (PLAN.md §4). Not installed in the backend image.
+pandas>=2.2
+geopandas>=1.0
+pyogrio>=0.10
+shapely>=2.0
+pyyaml>=6.0
+pymongo>=4.9
+python-dotenv>=1.0
+pytest>=8.0

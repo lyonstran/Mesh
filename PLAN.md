@@ -887,29 +887,19 @@ server: { proxy: { '/api': 'http://localhost:8000', '/ws': { target: 'ws://local
 
 ## 16. Deployment (Vultr + Caddy + .tech)
 
-**`docker-compose.yml`:**
-- `backend`: build `./backend`; command `uvicorn app.main:app --host 0.0.0.0 --port 8000`; `env_file: .env`; volume for `backend/media`.
-- `caddy`: image `caddy:2`; ports 80 and 443; mounts `./deploy/Caddyfile` and `./frontend/dist:/srv`; volumes for Caddy data and config (certificates).
+**The runbook is `docs/DEPLOY.md`; the scripts are `deploy/bootstrap-vm.sh` (once per VM) and `deploy/deploy.sh` (every deploy). Summary of what is built:**
 
-**`deploy/Caddyfile`:**
-```
-<domain>.tech {
-    encode gzip
-    handle /api/* { reverse_proxy backend:8000 }
-    handle /ws { reverse_proxy backend:8000 }
-    handle {
-        root * /srv
-        try_files {path} /index.html
-        file_server
-    }
-}
-```
+**`docker-compose.yml`:**
+- `backend`: build `./backend`; `env_file: .env`; a named volume for `/app/media`; a healthcheck on `/api/health`. The image runs as a normal user, pre-downloads the fastembed model at build time (`FASTEMBED_CACHE_PATH=/opt/fastembed`), and starts uvicorn with `--proxy-headers`. No port is published; only Caddy reaches it.
+- `caddy`: built from `deploy/Caddy.Dockerfile`, a multi-stage build that compiles the frontend (the `VITE_*` values are build args read from `.env`) and copies `dist` into the `caddy:2` image, so the VM needs no Node and no committed `frontend/dist`. Ports 80, 443 and 443/udp; volumes for Caddy data and config (certificates); waits for a healthy backend.
+
+**`deploy/Caddyfile`:** the domain comes from `SITE_DOMAIN` (default `mesh-together.tech`; `localhost` gives a local test certificate). It gzips, adds `X-Content-Type-Options`, `Referrer-Policy` and a short HSTS, proxies `/api/*` and `/ws` to `backend:8000`, serves the SPA with `try_files {path} /index.html` (hashed `/assets/*` cached for a year, the page itself `no-cache`), and redirects `www` to the bare domain.
 
 **Steps [HUMAN where noted]:**
 1. Create a Vultr Ubuntu VM (smallest plan is fine). Install Docker and the compose plugin. Open ports 80 and 443 in the firewall.
 2. **[HUMAN]** Register the .tech domain and point an A record (`@`) at the VM's IP.
 3. **[HUMAN]** In Atlas Network Access, allow the VM's IP.
-4. Build the frontend (`npm ci && npm run build`) with the production `VITE_*` env vars. `docker compose up -d --build`. Caddy obtains HTTPS certificates automatically.
+4. Create `.env` from `deploy/env.production.example` (no inline comments, `COOKIE_SECURE=true`), then `bash ./deploy/deploy.sh`. It refuses unsafe settings, builds both images (the frontend with the `VITE_*` values baked in), and waits for a healthy backend. Caddy obtains HTTPS certificates automatically.
 5. Set `COOKIE_SECURE=true` and `DEMO_LOGIN` as desired. Add the production origin to the Google OAuth client.
 6. **Smoke test on a real phone over cellular:** login, microphone, geolocation, WebSocket connection, audio playback.
 

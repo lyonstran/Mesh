@@ -10,6 +10,7 @@ import {
   useRequestAction,
 } from '../api/hooks'
 import EmergencyInterstitial from '../components/EmergencyInterstitial'
+import HazardBanner from '../components/HazardBanner'
 import LiveTracking from '../components/LiveTracking'
 import SpeakButton from '../components/SpeakButton'
 import StatusTimeline from '../components/StatusTimeline'
@@ -143,6 +144,7 @@ function NewRequestForm() {
   const busy = check.isPending || preview.isPending || create.isPending
   return (
     <form onSubmit={submit}>
+      <HazardBanner point={location} className="mb-6" />
       <h1 className="animate-rise text-3xl font-extrabold">What do you need help with?</h1>
       <p className="animate-rise stagger mt-2 text-ink-soft" style={stagger(1)}>
         Say what happened and what would help. The more specific you are, the better we can match you with a volunteer.
@@ -222,6 +224,7 @@ function ActiveRequest({ request }: { request: HelpRequest }) {
 
   return (
     <section>
+      <HazardBanner point={request.location ?? request.display_location} className="mb-6" />
       <div className="flex flex-wrap items-start justify-between gap-3">
         <h1 className="animate-rise text-3xl font-extrabold">{headline}</h1>
         <SpeakButton text={spoken} />
