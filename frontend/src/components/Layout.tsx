@@ -12,7 +12,11 @@ export default function Layout() {
     <div className="min-h-screen">
       <header className="sticky top-0 z-10 bg-ink text-white">
         <div className="mx-auto flex max-w-xl items-center justify-between gap-3 px-4 py-3">
-          <Link to={user ? homeFor(user.role) : '/'} className="text-xl font-extrabold tracking-tight">
+          <Link
+            to={user ? homeFor(user.role) : '/'}
+            className="flex items-center gap-2 text-xl font-extrabold tracking-tight"
+          >
+            <img src="/logo.png" alt="" className="h-9 w-9 rounded-md bg-white object-contain p-0.5" />
             Mesh
           </Link>
           {user && (
