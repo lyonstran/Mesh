@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 
 import pytest
 from fastapi.testclient import TestClient
-from pymongo import MongoClient
+from pymongo import AsyncMongoClient, MongoClient
 
 from app.ai.provider import get_provider
 from app.config import get_settings
@@ -110,3 +110,20 @@ def drop_test_db(db) -> None:
     """Drop every collection; Mongo removes the empty database. Atlas readWrite roles can't dropDatabase."""
     for name in db.list_collection_names():
         db.drop_collection(name)
+
+
+@pytest.fixture
+async def async_db():
+    """A throwaway async database for service-level tests (needs MONGODB_TEST_URI)."""
+    uri = os.environ.get("MONGODB_TEST_URI")
+    if not uri:
+        pytest.skip("MONGODB_TEST_URI not set")
+    client = AsyncMongoClient(uri, tz_aware=True)
+    database = client[f"mesh_test_{uuid.uuid4().hex[:8]}"]
+    try:
+        yield database
+    finally:
+        # Atlas readWrite roles can't dropDatabase; an emptied database disappears on its own.
+        for name in await database.list_collection_names():
+            await database.drop_collection(name)
+        await client.close()

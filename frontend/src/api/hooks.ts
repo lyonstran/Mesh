@@ -3,6 +3,7 @@ import type {
   AddRoleBody,
   DemoUser,
   GeocodeMatch,
+  HazardReport,
   HelpRequest,
   LatLon,
   LiveLocation,
@@ -21,6 +22,8 @@ import { api, post } from './client'
 // Polling intervals from PLAN.md §0.1 (WebSocket realtime comes later).
 const POLL_REQUESTER_MS = 5_000
 const POLL_RANKED_MS = 10_000
+// Hazards change slowly and the backend caches them for 5 minutes (PLAN.md §7).
+const POLL_HAZARDS_MS = 5 * 60_000
 
 export const keys = {
   me: ['me'] as const,
@@ -219,5 +222,18 @@ export function useOtherLocation(requestId: string, enabled: boolean) {
     enabled,
     refetchInterval: POLL_LOCATION_MS,
     retry: false,
+  })
+}
+
+/** Hazard report for a point. Coordinates are rounded to ~1 km, the same key the backend caches on. */
+export function useHazards(point: LatLon | null | undefined) {
+  const lat = point ? Math.round(point.lat * 100) / 100 : null
+  const lon = point ? Math.round(point.lon * 100) / 100 : null
+  return useQuery({
+    queryKey: ['hazards', lat, lon],
+    queryFn: () => api<HazardReport>(`/api/hazards?lat=${lat}&lon=${lon}`),
+    enabled: lat !== null && lon !== null,
+    staleTime: POLL_HAZARDS_MS,
+    refetchInterval: POLL_HAZARDS_MS,
   })
 }

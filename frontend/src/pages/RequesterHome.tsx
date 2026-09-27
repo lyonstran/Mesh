@@ -10,6 +10,7 @@ import {
   useRequestAction,
 } from '../api/hooks'
 import EmergencyInterstitial from '../components/EmergencyInterstitial'
+import HazardBanner from '../components/HazardBanner'
 import LiveTracking from '../components/LiveTracking'
 import { LocationPicker, VolunteersMap } from '../components/map/lazy'
 import { Button, ErrorText, Field, Loading, inputClass } from '../components/ui'
@@ -140,6 +141,7 @@ function NewRequestForm() {
   const busy = check.isPending || preview.isPending || create.isPending
   return (
     <form onSubmit={submit}>
+      <HazardBanner point={location} className="mb-6" />
       <h1 className="animate-rise text-3xl font-extrabold">What do you need help with?</h1>
       <p className="animate-rise stagger mt-2 text-ink-soft" style={stagger(1)}>
         Say what happened and what would help. The more specific you are, the better we can match you with a volunteer.
@@ -208,6 +210,7 @@ function ActiveRequest({ request }: { request: HelpRequest }) {
 
   return (
     <section>
+      <HazardBanner point={request.location ?? request.display_location} className="mb-6" />
       <h1 className="animate-rise text-3xl font-extrabold">{claimed ? `${request.helper?.name ?? 'A volunteer'} is helping you` : 'Your request is posted'}</h1>
       <p className="mt-2 text-ink-soft">
         {claimed

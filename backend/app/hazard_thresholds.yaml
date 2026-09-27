@@ -1,0 +1,21 @@
+# Derived (non-official) hazard signals from Open-Meteo (PLAN.md §7). Official levels come only from NWS alerts.
+# Every derived level is capped at `derived_level_cap`. Each value names its source; team-chosen values say so.
+
+derived_level_cap: 2
+
+# US AQI (Open-Meteo `us_aqi`). Breakpoints are the EPA AQI categories (airnow.gov "AQI Basics").
+aqi:
+  - {min: 101, level: 1, category: "Unhealthy for Sensitive Groups"}  # EPA 101-150
+  - {min: 151, level: 2, category: "Unhealthy"}                       # EPA 151-200
+  - {min: 201, level: 2, category: "Very Unhealthy"}                  # EPA 201-300; level held at the derived cap
+  - {min: 301, level: 2, category: "Hazardous"}                       # EPA 301+; level held at the derived cap
+
+# Max wind gust, current or next 12 h (mph). 58 mph is the NWS severe thunderstorm wind criterion.
+wind_gust_mph: {min: 58, level: 2}
+
+# Max apparent temperature, current or next 12 h (F). TEAM-CHOSEN elevated threshold, not an NWS criterion;
+# heat advisories and warnings come from NWS alerts.
+apparent_temp_f: {min: 103, level: 1}
+
+# Total precipitation over the next 12 h (inches). TEAM-CHOSEN, editable.
+precip_12h_in: {min: 2.0, level: 1}

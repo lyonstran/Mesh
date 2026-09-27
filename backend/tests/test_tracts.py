@@ -1,10 +1,7 @@
 """tract_for_point against a real MongoDB with a fixture polygon (needs MONGODB_TEST_URI; skipped otherwise)."""
 
-import os
-import uuid
-
 import pytest
-from pymongo import GEOSPHERE, AsyncMongoClient
+from pymongo import GEOSPHERE
 
 from app.services.tracts import tract_for_point
 
@@ -37,22 +34,10 @@ NO_DATA_TRACT = FIXTURE_TRACT | {
 
 
 @pytest.fixture
-async def db():
-    uri = os.environ.get("MONGODB_TEST_URI")
-    if not uri:
-        pytest.skip("MONGODB_TEST_URI not set")
-    client = AsyncMongoClient(uri)
-    name = f"mesh_test_{uuid.uuid4().hex[:8]}"
-    database = client[name]
-    await database.tracts.create_index([("geometry", GEOSPHERE)])
-    await database.tracts.insert_many([FIXTURE_TRACT, NO_DATA_TRACT])
-    try:
-        yield database
-    finally:
-        # Atlas readWrite roles can't dropDatabase; an emptied database disappears on its own.
-        for coll in await database.list_collection_names():
-            await database.drop_collection(coll)
-        await client.close()
+async def db(async_db):
+    await async_db.tracts.create_index([("geometry", GEOSPHERE)])
+    await async_db.tracts.insert_many([FIXTURE_TRACT, NO_DATA_TRACT])
+    return async_db
 
 
 async def test_point_inside_returns_tract_without_geometry(db):
