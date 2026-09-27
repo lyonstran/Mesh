@@ -200,7 +200,7 @@ class Hazard(BaseModel):
 
     type: HazardType
     level: int = Field(ge=1, le=3)
-    source: Literal["NWS", "Open-Meteo"]
+    source: Literal["NWS", "Open-Meteo", "Simulation"]  # "Simulation" only while a demo scenario is active
     official: bool
     event: str | None = None  # NWS event name, e.g. "Severe Thunderstorm Warning"
     headline: str | None = None

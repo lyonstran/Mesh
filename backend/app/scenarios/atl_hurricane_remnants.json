@@ -1,0 +1,357 @@
+{
+ "id": "atl_hurricane_remnants",
+ "label": "SIMULATED",
+ "title": "Hurricane remnants over metro Atlanta",
+ "description": "A made-up demo scenario: the remnants of a hurricane bring tropical-storm winds and flash flooding to metro Atlanta. Nothing here is a real alert or forecast.",
+ "duration_hours": 6,
+ "areas": {
+  "storm": {
+   "type": "Polygon",
+   "coordinates": [
+    [
+     [
+      -84.3963,
+      34.0454
+     ],
+     [
+      -84.3398,
+      34.0413
+     ],
+     [
+      -84.285,
+      34.0291
+     ],
+     [
+      -84.2336,
+      34.0091
+     ],
+     [
+      -84.1872,
+      33.9821
+     ],
+     [
+      -84.1472,
+      33.9488
+     ],
+     [
+      -84.1148,
+      33.9102
+     ],
+     [
+      -84.091,
+      33.8675
+     ],
+     [
+      -84.0765,
+      33.822
+     ],
+     [
+      -84.0717,
+      33.7752
+     ],
+     [
+      -84.0768,
+      33.7283
+     ],
+     [
+      -84.0916,
+      33.6829
+     ],
+     [
+      -84.1156,
+      33.6404
+     ],
+     [
+      -84.1482,
+      33.6019
+     ],
+     [
+      -84.1882,
+      33.5687
+     ],
+     [
+      -84.2345,
+      33.5418
+     ],
+     [
+      -84.2856,
+      33.522
+     ],
+     [
+      -84.3401,
+      33.5099
+     ],
+     [
+      -84.3963,
+      33.5058
+     ],
+     [
+      -84.4525,
+      33.5099
+     ],
+     [
+      -84.507,
+      33.522
+     ],
+     [
+      -84.5581,
+      33.5418
+     ],
+     [
+      -84.6044,
+      33.5687
+     ],
+     [
+      -84.6444,
+      33.6019
+     ],
+     [
+      -84.677,
+      33.6404
+     ],
+     [
+      -84.701,
+      33.6829
+     ],
+     [
+      -84.7158,
+      33.7283
+     ],
+     [
+      -84.7209,
+      33.7752
+     ],
+     [
+      -84.7161,
+      33.822
+     ],
+     [
+      -84.7016,
+      33.8675
+     ],
+     [
+      -84.6778,
+      33.9102
+     ],
+     [
+      -84.6454,
+      33.9488
+     ],
+     [
+      -84.6054,
+      33.9821
+     ],
+     [
+      -84.559,
+      34.0091
+     ],
+     [
+      -84.5076,
+      34.0291
+     ],
+     [
+      -84.4528,
+      34.0413
+     ],
+     [
+      -84.3963,
+      34.0454
+     ]
+    ]
+   ]
+  },
+  "flood": {
+   "type": "Polygon",
+   "coordinates": [
+    [
+     [
+      -84.4,
+      33.8129
+     ],
+     [
+      -84.3774,
+      33.8113
+     ],
+     [
+      -84.3556,
+      33.8064
+     ],
+     [
+      -84.3351,
+      33.7984
+     ],
+     [
+      -84.3165,
+      33.7876
+     ],
+     [
+      -84.3005,
+      33.7743
+     ],
+     [
+      -84.2876,
+      33.7589
+     ],
+     [
+      -84.278,
+      33.7419
+     ],
+     [
+      -84.2722,
+      33.7237
+     ],
+     [
+      -84.2703,
+      33.7049
+     ],
+     [
+      -84.2723,
+      33.6862
+     ],
+     [
+      -84.2782,
+      33.668
+     ],
+     [
+      -84.2877,
+      33.651
+     ],
+     [
+      -84.3007,
+      33.6356
+     ],
+     [
+      -84.3167,
+      33.6223
+     ],
+     [
+      -84.3352,
+      33.6115
+     ],
+     [
+      -84.3557,
+      33.6036
+     ],
+     [
+      -84.3775,
+      33.5987
+     ],
+     [
+      -84.4,
+      33.5971
+     ],
+     [
+      -84.4225,
+      33.5987
+     ],
+     [
+      -84.4443,
+      33.6036
+     ],
+     [
+      -84.4648,
+      33.6115
+     ],
+     [
+      -84.4833,
+      33.6223
+     ],
+     [
+      -84.4993,
+      33.6356
+     ],
+     [
+      -84.5123,
+      33.651
+     ],
+     [
+      -84.5218,
+      33.668
+     ],
+     [
+      -84.5277,
+      33.6862
+     ],
+     [
+      -84.5297,
+      33.7049
+     ],
+     [
+      -84.5278,
+      33.7237
+     ],
+     [
+      -84.522,
+      33.7419
+     ],
+     [
+      -84.5124,
+      33.7589
+     ],
+     [
+      -84.4995,
+      33.7743
+     ],
+     [
+      -84.4835,
+      33.7876
+     ],
+     [
+      -84.4649,
+      33.7984
+     ],
+     [
+      -84.4444,
+      33.8064
+     ],
+     [
+      -84.4226,
+      33.8113
+     ],
+     [
+      -84.4,
+      33.8129
+     ]
+    ]
+   ]
+  }
+ },
+ "hazards": [
+  {
+   "area": "storm",
+   "type": "tropical",
+   "level": 3,
+   "source": "Simulation",
+   "official": false,
+   "event": "Tropical Storm Warning (SIMULATED)",
+   "headline": "SIMULATED SCENARIO, not a real alert: tropical-storm-force winds across metro Atlanta.",
+   "instruction": "This is a demo scenario. In a real warning, follow instructions from the National Weather Service and local officials."
+  },
+  {
+   "area": "flood",
+   "type": "flood",
+   "level": 3,
+   "source": "Simulation",
+   "official": false,
+   "event": "Flash Flood Warning (SIMULATED)",
+   "headline": "SIMULATED SCENARIO, not a real alert: flash flooding along creeks and low roads south of downtown.",
+   "instruction": "This is a demo scenario. In a real warning, never drive through flooded roads."
+  },
+  {
+   "area": "storm",
+   "type": "wind",
+   "level": 2,
+   "source": "Simulation",
+   "official": false,
+   "value": 65,
+   "unit": "mph gust",
+   "category": "Simulated reading"
+  }
+ ],
+ "current": {
+  "wind_gust_mph": 65,
+  "precip_next_12h_in": 5.2,
+  "temperature_f": 74,
+  "apparent_temperature_f": 74
+ }
+}

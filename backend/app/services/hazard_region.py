@@ -11,11 +11,13 @@ from datetime import UTC, datetime, timedelta
 
 import httpx
 from pymongo.asynchronous.database import AsyncDatabase
-from shapely import make_valid, set_precision
-from shapely.geometry import MultiPolygon, Polygon, mapping, shape
+from shapely import make_valid
+from shapely.geometry import MultiPolygon, shape
 from shapely.ops import unary_union
 
 from app.config import get_settings
+from app.services import geometry as geometry_util
+from app.services import sim
 from app.services.hazards import NWS_ALERTS_URL, TIMEOUT_S, _get_json, event_type, severity_level
 
 log = logging.getLogger("mesh.hazards.region")
@@ -24,7 +26,6 @@ AREA = "GA"
 ZONE_URL_PREFIX = "https://api.weather.gov/zones/"
 ZONE_TTL = timedelta(days=7)
 SIMPLIFY_DEG = 0.002  # about 200 m: plenty for a statewide overlay; a coastal zone drops from ~6,500 vertices to ~1,500
-MIN_PART_AREA_DEG2 = 2e-6  # drop slivers and tiny marsh islands (about 0.02 km²)
 MAX_CONCURRENT_ZONES = 6
 
 
@@ -32,44 +33,9 @@ def _nws_headers() -> dict:
     return {"User-Agent": get_settings().nws_user_agent, "Accept": "application/geo+json"}
 
 
-def _polygonal(geom) -> Polygon | MultiPolygon | None:
-    parts = []
-    for g in getattr(geom, "geoms", [geom]):
-        if isinstance(g, MultiPolygon):
-            parts.extend(g.geoms)
-        elif isinstance(g, Polygon):
-            parts.append(g)
-    parts = [p for p in parts if p.area >= MIN_PART_AREA_DEG2]
-    if not parts:
-        return None
-    return parts[0] if len(parts) == 1 else MultiPolygon(parts)
-
-
-def _clean(geom) -> Polygon | MultiPolygon | None:
-    """Snap to a ~10 m grid and repair. Rounding coordinates by hand can make coastal shapes self-intersect."""
-    return _polygonal(make_valid(set_precision(make_valid(geom), 1e-4)))
-
-
-def _geojson(geom) -> dict:
-    """shapely's mapping() nests tuples; use lists so fresh and cached (Mongo) results are identical."""
-
-    def lists(c):
-        return [c[0], c[1]] if isinstance(c[0], (int, float)) else [lists(x) for x in c]
-
-    g = mapping(geom)
-    return {"type": g["type"], "coordinates": lists(g["coordinates"])}
-
-
 def simplify(geometry: dict | None) -> dict | None:
-    """Display geometry: simplified, slivers dropped, snapped to ~10 m, valid. None if nothing polygonal remains."""
-    if not geometry:
-        return None
-    try:
-        geom = _clean(shape(geometry).simplify(SIMPLIFY_DEG, preserve_topology=True))
-    except Exception:
-        log.exception("Could not simplify an NWS geometry")
-        return None
-    return _geojson(geom) if geom is not None else None
+    """Display geometry for an alert area (see services/geometry.py)."""
+    return geometry_util.simplify(geometry, SIMPLIFY_DEG)
 
 
 def _merge(geometries: list[dict]) -> dict | None:
@@ -78,11 +44,11 @@ def _merge(geometries: list[dict]) -> dict | None:
     if not shapes:
         return None
     try:
-        merged = _clean(unary_union([make_valid(s) for s in shapes]))
+        merged = geometry_util.clean(unary_union([make_valid(s) for s in shapes]))
     except Exception:
         log.warning("Zone union failed; drawing the zones side by side")
-        merged = _polygonal(MultiPolygon([p for s in shapes for p in getattr(s, "geoms", [s])]))
-    return _geojson(merged) if merged is not None else None
+        merged = geometry_util.polygonal(MultiPolygon([p for s in shapes for p in getattr(s, "geoms", [s])]))
+    return geometry_util.to_geojson(merged) if merged is not None else None
 
 
 async def _zone_geometry(db: AsyncDatabase, client: httpx.AsyncClient, url: str, gate: asyncio.Semaphore) -> dict | None:
@@ -154,7 +120,7 @@ async def get_region(db: AsyncDatabase, client: httpx.AsyncClient | None = None)
     max_age = timedelta(seconds=get_settings().hazard_cache_seconds)
     cached = await db.hazard_cache.find_one({"_id": key})
     if cached and cached["fetched_at"] > datetime.now(UTC) - max_age:
-        return cached["report"]
+        return await sim.merge_region(cached["report"], db)
 
     own = client is None
     client = client or httpx.AsyncClient(timeout=TIMEOUT_S)
@@ -177,5 +143,4 @@ async def get_region(db: AsyncDatabase, client: httpx.AsyncClient | None = None)
     }
     if payload:
         await db.hazard_cache.replace_one({"_id": key}, {"report": report, "fetched_at": datetime.now(UTC)}, upsert=True)
-    # TODO(P2): run the simulation merge here too once sim.merge lands, so scenario areas show on the map.
-    return report
+    return await sim.merge_region(report, db)

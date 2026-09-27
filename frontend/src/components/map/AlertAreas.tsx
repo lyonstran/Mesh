@@ -64,7 +64,7 @@ function AlertArea({ alert, selection, padding }: { alert: RegionAlert; selectio
       <Popup>
         <div className="max-w-64 space-y-1 text-sm">
           <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
-            NWS (official) · {HAZARD_LEVEL_LABELS[alert.properties.level]}
+            {alert.properties.source === 'Simulation' ? 'SIMULATED scenario' : 'NWS (official)'} · {HAZARD_LEVEL_LABELS[alert.properties.level]}
           </p>
           <p className="font-extrabold">{alert.properties.event}</p>
           {alert.properties.headline && <p>{alert.properties.headline}</p>}

@@ -223,7 +223,7 @@ export type EjiBand = 'Very high' | 'High' | 'Moderate' | 'Lower' | 'Unknown'
 
 /** One part of `need`. EJI is a coarse band only; the raw rank never leaves the backend. */
 export type NeedPart =
-  | { key: 'urgency' | 'hazard' | 'wait'; raw: number; weight: number; contribution: number; source: string }
+  | { key: 'urgency' | 'hazard' | 'wait'; raw: number; weight: number; contribution: number; source: string; simulated?: boolean }
   | { key: 'eji'; band: EjiBand; weight: number; source: string }
 
 /** One factor of the blended match score (0-1 value times weight). A null input counts as 0.5 and is flagged. */
@@ -247,6 +247,7 @@ export interface RankedResponse {
   claim_limit: number
   claim_limit_reached: boolean
   weights_note: string // "Weights are designed defaults, not fitted."
+  simulated: boolean // a demo scenario is shaping hazard levels
 }
 
 /** A request in the volunteer feed: blended score, rounded distance from its approximate area, and why. */
@@ -272,7 +273,7 @@ export interface DemoUser {
 }
 
 export type HazardType = 'tornado' | 'severe_storm' | 'flood' | 'heat' | 'air_quality' | 'winter' | 'tropical' | 'wind' | 'other'
-export type HazardSource = 'NWS' | 'Open-Meteo'
+export type HazardSource = 'NWS' | 'Open-Meteo' | 'Simulation' // 'Simulation' only while a demo scenario is on
 export type HazardSourceName = 'NWS' | 'Open-Meteo forecast' | 'Open-Meteo air quality'
 
 /** One hazard (PLAN.md §7). NWS alerts are official; Open-Meteo signals are derived and capped at level 2. */
@@ -314,8 +315,8 @@ export interface RegionAlertProperties {
   event: string
   type: HazardType
   level: 1 | 2 | 3
-  official: true
-  source: 'NWS'
+  official: boolean // false for simulated scenario areas
+  source: 'NWS' | 'Simulation'
   headline: string | null
   area_desc: string | null
   expires: string | null // ISO
@@ -336,4 +337,33 @@ export interface HazardRegion {
   simulated: boolean
   sources_failed: HazardSourceName[]
   fetched_at: string
+}
+
+/** GET /api/tracts: a tract's EJI band only (no GEOID, no raw rank). band_index 0 = Unknown ... 4 = Very high. */
+export interface TractBandFeature {
+  type: 'Feature'
+  geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon
+  properties: { band: EjiBand; band_index: 0 | 1 | 2 | 3 | 4 }
+}
+
+export interface TractsResponse {
+  type: 'FeatureCollection'
+  features: TractBandFeature[]
+  too_zoomed_out: boolean
+}
+
+/** GET /api/sim (demo mode only; 404 otherwise). */
+export interface SimScenario {
+  id: string
+  title: string
+  description: string
+  label: 'SIMULATED'
+}
+
+export interface SimState {
+  active: boolean
+  scenario_id: string | null
+  activated_at: string | null
+  scenarios: SimScenario[]
+  rescored?: number
 }

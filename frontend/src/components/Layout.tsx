@@ -2,6 +2,7 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useLogout, useMe, useSwitchMode } from '../api/hooks'
 import { homeFor } from '../auth/home'
 import type { Role } from '../lib/types'
+import SimSwitch from './SimSwitch'
 
 const MODES: { role: Role; label: string }[] = [
   { role: 'requester', label: 'Requester' },
@@ -32,6 +33,7 @@ export default function Layout() {
           </Link>
           {user && (
             <div className="flex items-center gap-1 text-sm sm:gap-2">
+              {user.role && <SimSwitch />}
               {user.role && user.roles.length > 1 ? (
                 <div role="group" aria-label="Switch mode" className="mr-1 flex rounded-full bg-surface p-1 text-xs font-bold ring-1 ring-line">
                   {MODES.map(({ role, label }) => (

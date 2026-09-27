@@ -11,3 +11,12 @@ export const ALERT_COLORS: Record<number, { stroke: string; fill: string }> = {
 export function alertKey(alert: RegionAlert, index: number): string {
   return alert.properties.id ?? `alert-${index}`
 }
+
+// Area vulnerability shading by EJI band index (0 Unknown ... 4 Very high): the blue ramp of the EJI atlas.
+export const EJI_BAND_FILL: Record<number, string> = {
+  0: '#9ca3af',
+  1: '#cde2fb',
+  2: '#86b6ef',
+  3: '#3987e5',
+  4: '#1c5cab',
+}

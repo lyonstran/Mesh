@@ -11,6 +11,9 @@ const LEVEL_STYLES: Record<number, { box: string; stripe: string; dot: string }>
 }
 
 function SourceTag({ hazard }: { hazard: Hazard }) {
+  if (hazard.source === 'Simulation') {
+    return <span className="rounded-full bg-alert px-2 py-0.5 text-xs font-extrabold tracking-wide text-white">SIMULATED</span>
+  }
   return hazard.official ? (
     <span className="rounded-full bg-ink px-2 py-0.5 text-xs font-semibold text-white">NWS (official)</span>
   ) : (
@@ -19,7 +22,7 @@ function SourceTag({ hazard }: { hazard: Hazard }) {
 }
 
 function describe(h: Hazard): string {
-  if (h.official) return h.headline ?? h.event ?? HAZARD_LABELS[h.type]
+  if (h.official || (h.source === 'Simulation' && h.event)) return h.headline ?? h.event ?? HAZARD_LABELS[h.type]
   const reading = h.value !== null ? `${Math.round(h.value * 10) / 10} ${h.unit ?? ''}`.trim() : ''
   return [HAZARD_LABELS[h.type], reading, h.category].filter(Boolean).join(' · ')
 }
