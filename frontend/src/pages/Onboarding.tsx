@@ -5,6 +5,7 @@ import { homeFor } from '../auth/home'
 import { BasicsFields, HelperProfileFields, RequesterFlagsFields } from '../components/ProfileFields'
 import { Button, ErrorText } from '../components/ui'
 import { EMPTY_FLAGS, EMPTY_HELPER, helperHasContent, type Basics } from '../lib/profile'
+import { stagger } from '../lib/motion'
 import type { HelperProfile, RequesterFlags, Role } from '../lib/types'
 
 const ROLE_CHOICES: { role: Role; title: string; body: string }[] = [
@@ -43,7 +44,7 @@ export default function Onboarding() {
 
   return (
     <form onSubmit={submit} className="space-y-8">
-      <div>
+      <div className="animate-rise">
         <h1 className="text-3xl font-extrabold">Welcome to Mesh</h1>
         <p className="mt-2 text-ink-soft">A few details so we can connect you with the right people.</p>
       </div>
@@ -51,14 +52,15 @@ export default function Onboarding() {
       <fieldset>
         <legend className="font-semibold">How do you want to use Mesh?</legend>
         <div className="mt-3 grid gap-3">
-          {ROLE_CHOICES.map((c) => (
+          {ROLE_CHOICES.map((c, i) => (
             <button
               key={c.role}
               type="button"
               aria-pressed={role === c.role}
               onClick={() => setRole(c.role)}
-              className={`rounded-xl border-2 p-4 text-left transition ${
-                role === c.role ? 'border-ink bg-porch-soft' : 'border-transparent bg-surface hover:border-line'
+              style={stagger(i + 1)}
+              className={`animate-rise stagger cursor-pointer rounded-xl border-2 p-4 text-left transition duration-200 active:scale-[0.99] ${
+                role === c.role ? 'border-emerald-600 bg-brand-soft' : 'border-transparent bg-surface hover:border-emerald-600/40'
               }`}
             >
               <span className="block text-lg font-extrabold">{c.title}</span>

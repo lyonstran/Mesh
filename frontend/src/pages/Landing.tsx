@@ -1,4 +1,6 @@
 import { Link } from 'react-router-dom'
+import Reveal from '../components/Reveal'
+import { stagger } from '../lib/motion'
 
 const REQUESTER_STEPS = [
   { title: 'Sign in', body: 'Use your Google account and tell us a little about your household.' },
@@ -19,7 +21,7 @@ function Steps({ title, steps }: { title: string; steps: typeof REQUESTER_STEPS 
       <ol className="mt-4 space-y-4">
         {steps.map((s, i) => (
           <li key={s.title} className="flex gap-4">
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-ink font-extrabold text-white">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand font-extrabold text-ink">
               {i + 1}
             </span>
             <div>
@@ -36,18 +38,18 @@ function Steps({ title, steps }: { title: string; steps: typeof REQUESTER_STEPS 
 /** An illustration of the product's core moment: a request matched to a volunteer who fits. */
 function ExampleMatch() {
   return (
-    <figure className="rounded-2xl bg-surface p-5 shadow-[0_1px_0_var(--color-line),0_12px_32px_-16px_rgba(30,42,71,0.35)]">
+    <figure className="animate-rise stagger rounded-2xl bg-surface p-5 shadow-[0_1px_0_var(--color-line),0_12px_32px_-16px_rgba(30,42,71,0.35)]">
       <figcaption className="text-sm font-semibold text-ink-soft">Example</figcaption>
       <div className="mt-3 flex gap-4">
-        <div className="relative w-2 shrink-0 overflow-hidden rounded-full bg-porch-soft" aria-hidden>
-          <div className="absolute inset-x-0 bottom-0 h-[85%] rounded-full bg-porch" />
+        <div className="relative w-2 shrink-0 overflow-hidden rounded-full bg-brand-soft" aria-hidden>
+          <div className="animate-grow absolute inset-x-0 bottom-0 h-[85%] origin-bottom rounded-full bg-brand" />
         </div>
         <div>
           <p className="text-sm text-ink-soft">Request, posted 4 minutes ago</p>
           <p className="mt-1 text-lg">A tree fell across my driveway and I can't get my car out.</p>
         </div>
       </div>
-      <div className="mt-5 rounded-xl bg-porch-soft p-4">
+      <div className="mt-5 rounded-xl bg-brand-soft p-4">
         <p className="font-semibold">Best fit: a neighbor with a chainsaw and a pickup truck</p>
         <p className="mt-1 text-ink-soft">“Happy to cut up fallen trees and haul away debris.”</p>
       </div>
@@ -57,22 +59,27 @@ function ExampleMatch() {
 
 export default function Landing() {
   return (
-    <main>
+    <main className="relative isolate">
+      {/* Soft green glow behind the hero; decorative only. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[36rem] bg-[radial-gradient(60%_70%_at_75%_0%,var(--color-brand-tint),transparent)]"
+      />
       {/* Fills the screen below the navbar (h-16 + 1px border) so the next section starts below the fold. */}
       <section className="mx-auto grid min-h-[calc(100svh-4rem-1px)] max-w-5xl content-center gap-10 px-4 py-12 lg:grid-cols-[1.1fr_1fr] lg:items-center">
         <div>
-          <h1 className="text-[2.5rem] leading-[1.08] font-extrabold sm:text-6xl">Help from the neighbors around you, after the storm.</h1>
-          <p className="mt-5 max-w-prose text-lg text-ink-soft">
+          <h1 className="animate-rise text-[2.5rem] leading-[1.08] font-extrabold sm:text-6xl">Help from the neighbors around you, after the storm.</h1>
+          <p className="animate-rise stagger mt-5 max-w-prose text-lg text-ink-soft" style={stagger(1)}>
             When severe weather hits, the fastest help is often next door. Mesh connects people who need a hand with
             volunteers whose skills fit what they need, then opens a private chat between them.
           </p>
-          <div className="mt-8 flex flex-wrap gap-3">
-            <Link to="/login" className="inline-flex min-h-12 items-center rounded-lg bg-porch px-6 text-lg font-semibold text-ink hover:brightness-95">
+          <div className="animate-rise stagger mt-8 flex flex-wrap gap-3" style={stagger(2)}>
+            <Link to="/login" className="inline-flex min-h-12 items-center cursor-pointer rounded-lg bg-brand px-6 text-lg font-semibold text-ink transition duration-150 hover:bg-emerald-400 active:scale-[0.98]">
               Ask for help
             </Link>
             <Link
               to="/login"
-              className="inline-flex min-h-12 items-center rounded-lg border border-line bg-surface px-6 text-lg font-semibold hover:border-ink-soft"
+              className="inline-flex min-h-12 items-center cursor-pointer rounded-lg border border-line bg-surface px-6 text-lg font-semibold transition duration-150 hover:border-emerald-600 active:scale-[0.98]"
             >
               Volunteer
             </Link>
@@ -83,53 +90,55 @@ export default function Landing() {
       </section>
 
       <section id="how-it-works" className="scroll-mt-20 bg-surface">
-        <div className="mx-auto max-w-5xl px-4 py-16">
+        <Reveal className="mx-auto max-w-5xl px-4 py-16">
           <h2 className="text-3xl font-extrabold">How it works</h2>
           <div className="mt-8 grid gap-12 md:grid-cols-2">
             <Steps title="If you need help" steps={REQUESTER_STEPS} />
             <Steps title="If you can help" steps={VOLUNTEER_STEPS} />
           </div>
-        </div>
+        </Reveal>
       </section>
 
-      <section id="volunteering" className="mx-auto max-w-5xl scroll-mt-20 px-4 py-16">
-        <h2 className="text-3xl font-extrabold">Requests ranked for you</h2>
-        <div className="mt-4 max-w-prose space-y-4 text-lg text-ink-soft">
-          <p>
-            Volunteers don't scroll through every request. Mesh compares what you said you can offer with what each person
-            asked for, and puts the closest matches first. Someone with a generator sees the person whose oxygen machine
-            needs power; someone with a chainsaw sees the fallen tree.
-          </p>
-          <p>You always choose which request to take, and you can hand it back if plans change.</p>
-        </div>
+      <section id="volunteering" className="scroll-mt-20">
+        <Reveal className="mx-auto max-w-5xl px-4 py-16">
+          <h2 className="text-3xl font-extrabold">Requests ranked for you</h2>
+          <div className="mt-4 max-w-prose space-y-4 text-lg text-ink-soft">
+            <p>
+              Volunteers don't scroll through every request. Mesh compares what you said you can offer with what each person
+              asked for, and puts the closest matches first. Someone with a generator sees the person whose oxygen machine
+              needs power; someone with a chainsaw sees the fallen tree.
+            </p>
+            <p>You always choose which request to take, and you can hand it back if plans change.</p>
+          </div>
+        </Reveal>
       </section>
 
-      <section id="safety" className="scroll-mt-20 bg-ink text-white">
-        <div className="mx-auto max-w-5xl px-4 py-16">
+      <section id="safety" className="on-dark scroll-mt-20 bg-ink text-white">
+        <Reveal className="mx-auto max-w-5xl px-4 py-16">
           <h2 className="text-3xl font-extrabold">Safety and privacy</h2>
           <ul className="mt-8 grid gap-8 md:grid-cols-3">
             <li>
-              <p className="font-semibold text-porch">Not a replacement for 911</p>
+              <p className="font-semibold text-emerald-400">Not a replacement for 911</p>
               <p className="mt-2 text-white/80">
                 If a request sounds like an emergency, Mesh shows a “Call 911” screen before anything is sent.
               </p>
             </li>
             <li>
-              <p className="font-semibold text-porch">Private chats</p>
+              <p className="font-semibold text-emerald-400">Private chats</p>
               <p className="mt-2 text-white/80">Only you and the one volunteer helping you can see your conversation.</p>
             </li>
             <li>
-              <p className="font-semibold text-porch">Your details stay with your volunteer</p>
+              <p className="font-semibold text-emerald-400">Your details stay with your volunteer</p>
               <p className="mt-2 text-white/80">
                 Other volunteers see only your request. Your name and anything you share about your needs go only to the
                 person who picks it.
               </p>
             </li>
           </ul>
-          <Link to="/login" className="mt-10 inline-flex min-h-12 items-center rounded-lg bg-porch px-6 font-semibold text-ink hover:brightness-95">
+          <Link to="/login" className="mt-10 inline-flex min-h-12 items-center cursor-pointer rounded-lg bg-brand px-6 font-semibold text-ink transition duration-150 hover:bg-emerald-400 active:scale-[0.98]">
             Get started
           </Link>
-        </div>
+        </Reveal>
       </section>
     </main>
   )

@@ -18,7 +18,7 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: (id: number)
     <div
       role={success ? 'status' : 'alert'}
       className={`toast-in pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-xl px-4 py-3 text-white shadow-lg ${
-        success ? 'bg-ok' : 'bg-alert'
+        success ? 'bg-brand-strong' : 'bg-alert'
       }`}
     >
       <span aria-hidden className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-white/20 text-sm font-extrabold">

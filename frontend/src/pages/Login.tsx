@@ -30,7 +30,7 @@ export default function Login() {
   const onLoggedIn = (data: MeResponse) => navigate(data.needs_onboarding ? '/onboarding' : homeFor(data.user.role), { replace: true })
 
   return (
-    <main className="mx-auto max-w-md px-4 py-12">
+    <main className="animate-rise mx-auto max-w-md px-4 py-12">
       <h1 className="text-3xl font-extrabold">Log in to Mesh</h1>
       <p className="mt-2 text-ink-soft">New here? Logging in creates your account; you'll choose whether you need help or can help next.</p>
 

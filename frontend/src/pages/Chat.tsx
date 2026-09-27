@@ -59,7 +59,7 @@ function RequestSummary({ request }: { request: HelpRequest }) {
       {activeFlags.length > 0 && (
         <ul className="mt-2 flex flex-wrap gap-2">
           {activeFlags.map((k) => (
-            <li key={k} className="rounded-full bg-porch-soft px-3 py-1 text-sm font-semibold">
+            <li key={k} className="rounded-full bg-brand-soft px-3 py-1 text-sm font-semibold">
               {FLAG_TEXT[k]}
             </li>
           ))}
@@ -154,7 +154,7 @@ export default function Chat() {
           {messages.map((m) => (
             <p
               key={m.id}
-              className={`max-w-[85%] rounded-2xl px-4 py-2 ${m.mine ? 'self-end rounded-br-sm bg-ink text-white' : 'self-start rounded-bl-sm bg-ground'}`}
+              className={`animate-fade-in max-w-[85%] rounded-2xl px-4 py-2 ${m.mine ? 'self-end rounded-br-sm bg-brand text-ink' : 'self-start rounded-bl-sm bg-ground'}`}
             >
               {m.text}
             </p>

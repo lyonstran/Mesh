@@ -3,8 +3,8 @@ import type { ButtonHTMLAttributes, ReactNode } from 'react'
 type Variant = 'primary' | 'accent' | 'quiet' | 'danger'
 
 const VARIANTS: Record<Variant, string> = {
-  primary: 'bg-ink text-white hover:bg-ink/90',
-  accent: 'bg-porch text-ink hover:brightness-95',
+  primary: 'bg-brand text-ink hover:bg-emerald-400',
+  accent: 'bg-brand text-ink hover:bg-emerald-400',
   quiet: 'border border-line bg-surface text-ink hover:border-ink-soft',
   danger: 'border border-alert/40 bg-surface text-alert hover:border-alert',
 }
@@ -17,7 +17,7 @@ export function Button({
   return (
     <button
       {...props}
-      className={`inline-flex min-h-12 items-center justify-center rounded-lg px-5 font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${VARIANTS[variant]} ${className}`}
+      className={`inline-flex min-h-12 items-center justify-center cursor-pointer rounded-lg px-5 font-semibold transition duration-150 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 ${VARIANTS[variant]} ${className}`}
     />
   )
 }
@@ -47,4 +47,4 @@ export function Field({ label, hint, children }: { label: string; hint?: string;
 }
 
 export const inputClass =
-  'w-full rounded-lg border border-line bg-surface px-3 py-3 text-ink placeholder:text-ink-soft/70 focus:border-ink focus:outline-none'
+  'w-full rounded-lg border border-line bg-surface px-3 py-3 text-ink placeholder:text-ink-soft/70 focus:border-emerald-600 focus:outline-none'

@@ -4,6 +4,7 @@ import { useCheckEmergency, useCreateRequest, useMyRequests, useRequestAction } 
 import EmergencyInterstitial from '../components/EmergencyInterstitial'
 import { Button, ErrorText, Loading, inputClass } from '../components/ui'
 import { STATUS_LABELS, timeAgo } from '../lib/labels'
+import { stagger } from '../lib/motion'
 import type { HelpRequest } from '../lib/types'
 
 function NewRequestForm() {
@@ -21,8 +22,8 @@ function NewRequestForm() {
 
   return (
     <form onSubmit={submit}>
-      <h1 className="text-3xl font-extrabold">What do you need help with?</h1>
-      <p className="mt-2 text-ink-soft">
+      <h1 className="animate-rise text-3xl font-extrabold">What do you need help with?</h1>
+      <p className="animate-rise stagger mt-2 text-ink-soft" style={stagger(1)}>
         Say what happened and what would help. The more specific you are, the better we can match you with a volunteer.
       </p>
       <label htmlFor="request-text" className="sr-only">
@@ -53,14 +54,14 @@ function ActiveRequest({ request }: { request: HelpRequest }) {
 
   return (
     <section>
-      <h1 className="text-3xl font-extrabold">{claimed ? `${request.helper?.name ?? 'A volunteer'} is helping you` : 'Your request is posted'}</h1>
+      <h1 className="animate-rise text-3xl font-extrabold">{claimed ? `${request.helper?.name ?? 'A volunteer'} is helping you` : 'Your request is posted'}</h1>
       <p className="mt-2 text-ink-soft">
         {claimed
           ? 'Use the chat to agree on the details. You can mark it resolved when you have what you need.'
           : 'Volunteers whose skills fit your request can see it now. This page updates on its own.'}
       </p>
 
-      <div className={`mt-6 rounded-xl bg-surface p-5 ${claimed ? 'border-l-4 border-porch' : ''}`}>
+      <div className={`animate-rise stagger mt-6 rounded-xl bg-surface p-5 ${claimed ? 'border-l-4 border-brand' : ''}`} style={stagger(1)}>
         <p className="text-sm font-semibold text-ink-soft">
           {STATUS_LABELS[request.status]}, posted {timeAgo(request.created_at)}
         </p>
@@ -71,7 +72,7 @@ function ActiveRequest({ request }: { request: HelpRequest }) {
         {claimed && (
           <Link
             to={`/chat/${request.id}`}
-            className="inline-flex min-h-12 items-center justify-center rounded-lg bg-ink px-5 font-semibold text-white hover:bg-ink/90"
+            className="inline-flex min-h-12 items-center justify-center rounded-lg bg-brand px-5 font-semibold text-ink transition duration-150 hover:bg-emerald-400 active:scale-[0.98]"
           >
             Open chat with {request.helper?.name ?? 'your volunteer'}
           </Link>

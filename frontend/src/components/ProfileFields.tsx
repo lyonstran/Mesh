@@ -19,9 +19,9 @@ function toggle<T>(list: T[], item: T): T[] {
   return list.includes(item) ? list.filter((x) => x !== item) : [...list, item]
 }
 
-const chipBase = 'inline-flex min-h-11 items-center rounded-full border px-4 text-sm font-semibold transition'
-const chipOn = 'border-ink bg-ink text-white'
-const chipOff = 'border-line bg-surface text-ink hover:border-ink-soft'
+const chipBase = 'inline-flex min-h-11 items-center cursor-pointer rounded-full border px-4 text-sm font-semibold transition-colors duration-200'
+const chipOn = 'border-gray-400 bg-gray-200 text-ink'
+const chipOff = 'border-line bg-surface text-ink hover:border-emerald-600'
 
 function Chip({ selected, onClick, children }: { selected: boolean; onClick: () => void; children: string }) {
   return (
@@ -31,7 +31,8 @@ function Chip({ selected, onClick, children }: { selected: boolean; onClick: () 
   )
 }
 
-export function BasicsFields({ role, value, onChange }: { role: Role; value: Basics; onChange: (v: Basics) => void }) {
+/** `role` tailors the hint on onboarding; the profile page omits it because these fields are shared by both profiles. */
+export function BasicsFields({ role, value, onChange }: { role?: Role; value: Basics; onChange: (v: Basics) => void }) {
   return (
     <div className="space-y-5">
       <Field label="Your name">
@@ -48,7 +49,13 @@ export function BasicsFields({ role, value, onChange }: { role: Role; value: Bas
       </Field>
       <Field
         label="About you"
-        hint={role === 'helper' ? 'Your work or experience, in a sentence or two.' : 'Anything a volunteer should know about you or your household.'}
+        hint={
+          role === 'helper'
+            ? 'Your work or experience, in a sentence or two.'
+            : role === 'requester'
+              ? 'Anything a volunteer should know about you or your household.'
+              : 'Your work or experience, or anything a volunteer should know about you or your household.'
+        }
       >
         <textarea
           className={`${inputClass} min-h-24`}
@@ -171,7 +178,7 @@ export function HelperProfileFields({ value, onChange }: { value: HelperProfile;
                 type="button"
                 aria-label={`Remove ${s}`}
                 onClick={() => onChange({ ...value, custom_skills: value.custom_skills.filter((x) => x !== s) })}
-                className="flex size-8 items-center justify-center rounded-full text-lg leading-none text-white/80 hover:bg-white/15 hover:text-white"
+                className="flex size-8 items-center justify-center rounded-full cursor-pointer text-lg leading-none text-ink hover:bg-ink/10"
               >
                 ×
               </button>
@@ -221,7 +228,7 @@ export function RequesterFlagsFields({ value, onChange }: { value: RequesterFlag
           <label key={key} className="flex min-h-11 items-center gap-3 rounded-lg bg-surface px-3">
             <input
               type="checkbox"
-              className="size-5 accent-ink"
+              className="size-5 accent-emerald-600"
               checked={value[key]}
               onChange={(e) => onChange({ ...value, [key]: e.target.checked })}
             />
