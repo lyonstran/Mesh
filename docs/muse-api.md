@@ -34,7 +34,17 @@ Muse Spark context window: 1,048,576 tokens. The docs list "structured output" a
 
 The response uses the OpenAI shape: `choices[0].message.content`. This is what `backend/app/ai/muse.py` implements.
 
-- `TODO(HUMAN)`: the pages didn't spell out `response_format`/`json_schema` parameters. Until confirmed, we ask for JSON in the prompt and validate it with pydantic (PLAN.md §8).
+Request parameters we use, from the `CreateChatCompletionRequest` schema (https://dev.meta.ai/docs/api-reference/chat-completions/schemas, read 2026-09-27):
+- `reasoning_effort`: enum `none | minimal | low | medium | high | xhigh | max`, nullable. "Reasoning intensity level."
+- `response_format`: `ResponseFormatText | ResponseFormatJsonSchema | ResponseFormatJsonObject`. "Constrains the format of the model's output."
+- `max_completion_tokens`: integer. "Upper bound on the tokens the model may generate for a completion." (Not used yet.)
+
+Observed against the live API (2026-09-27), not stated in the docs:
+- `muse-spark-1.3` rejects `reasoning_effort: "none"` with HTTP 400 ("Supported values: [minimal, low, medium, high, x…").
+- Spark reasons before answering. The response reports it as `usage.completion_tokens_details.reasoning_tokens`. For a triage call at the default effort, about 875 of 915 output tokens were reasoning, and the call took 10–25 s. At `minimal` it took about 2 s with the same or better labels. `backend/app/ai/muse.py` uses `minimal` plus `{"type": "json_object"}` for structured calls, and still validates the JSON with pydantic (PLAN.md §8).
+- The message object has `content`, `refusal` and `role`.
+
+- `TODO(HUMAN)`: the `ResponseFormatJsonSchema` fields (for strict schema output) weren't expanded on the schema page, so we use `json_object` only.
 
 Other text endpoints exist but we don't use them yet: `POST /v1/responses` (Responses API) and `POST /v1/messages` (Anthropic-compatible).
 

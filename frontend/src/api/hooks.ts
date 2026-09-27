@@ -12,7 +12,9 @@ import type {
   OnboardingBody,
   ProfileUpdate,
   RankedResponse,
+  RequestCreateBody,
   Role,
+  Triage,
 } from '../lib/types'
 import { api, post } from './client'
 
@@ -148,11 +150,17 @@ export function useCheckEmergency() {
   return useMutation({ mutationFn: (text: string) => post<{ emergency: boolean }>('/api/requests/check', { text }) })
 }
 
+/** The triage card for a draft request. Saves nothing; can take several seconds while the AI reads it. */
+export function usePreviewRequest() {
+  return useMutation({
+    mutationFn: (body: RequestCreateBody) => post<{ triage: Triage; emergency: boolean }>('/api/requests/preview', body),
+  })
+}
+
 export function useCreateRequest() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (body: { text: string; location?: LatLon }) =>
-      post<{ request: HelpRequest; show_911: boolean }>('/api/requests', body),
+    mutationFn: (body: RequestCreateBody) => post<{ request: HelpRequest; show_911: boolean }>('/api/requests', body),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.mine }),
   })
 }

@@ -1,33 +1,143 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useCheckEmergency, useCreateRequest, useMe, useMyRequests, useNearbyVolunteers, useRequestAction } from '../api/hooks'
+import {
+  useCheckEmergency,
+  useCreateRequest,
+  useMe,
+  useMyRequests,
+  useNearbyVolunteers,
+  usePreviewRequest,
+  useRequestAction,
+} from '../api/hooks'
 import EmergencyInterstitial from '../components/EmergencyInterstitial'
 import LiveTracking from '../components/LiveTracking'
 import { LocationPicker, VolunteersMap } from '../components/map/lazy'
-import { Button, ErrorText, Loading, inputClass } from '../components/ui'
-import { STATUS_LABELS, timeAgo } from '../lib/labels'
+import { Button, ErrorText, Field, Loading, inputClass } from '../components/ui'
+import { CATEGORY_LABELS, FLAG_LABELS, STATUS_LABELS, URGENCY_LABELS, timeAgo } from '../lib/labels'
 import { stagger } from '../lib/motion'
-import type { HelpRequest, LatLon } from '../lib/types'
+import { CATEGORIES, type Category, type HelpRequest, type LatLon, type Triage } from '../lib/types'
+
+/** Step 2 of submitting: how Mesh read the request. The category can be corrected; urgency is shown, not editable. */
+function TriageCard({
+  text,
+  triage,
+  category,
+  onCategory,
+  onSend,
+  onEdit,
+  busy,
+  error,
+}: {
+  text: string
+  triage: Triage
+  category: Category
+  onCategory: (c: Category) => void
+  onSend: () => void
+  onEdit: () => void
+  busy: boolean
+  error: unknown
+}) {
+  return (
+    <section aria-labelledby="review-title">
+      <h1 id="review-title" className="animate-rise text-3xl font-extrabold">Check your request</h1>
+      <p className="mt-2 text-ink-soft">This is what volunteers will see first. Fix the type of help if we got it wrong.</p>
+
+      <div className="animate-rise stagger mt-6 space-y-5 rounded-xl bg-surface p-5" style={stagger(1)}>
+        <div>
+          <p className="text-sm font-semibold text-ink-soft">Your words</p>
+          <p className="mt-1 text-lg">{text}</p>
+        </div>
+        {triage.source === 'ai' && (
+          <div>
+            <p className="text-sm font-semibold text-ink-soft">Summary for volunteers</p>
+            <p className="mt-1">{triage.summary}</p>
+          </div>
+        )}
+        <Field label="Type of help">
+          <select className={inputClass} value={category} onChange={(e) => onCategory(e.target.value as Category)}>
+            {CATEGORIES.map((c) => (
+              <option key={c} value={c}>
+                {CATEGORY_LABELS[c]}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <div>
+          <p className="font-semibold">How urgent</p>
+          <p className="mt-1">
+            <span className="font-extrabold">{triage.urgency} of 5</span>: {URGENCY_LABELS[triage.urgency]}
+          </p>
+          <p className="mt-1 text-sm text-ink-soft">Set from your words and your profile. If it's more urgent, go back and say so.</p>
+        </div>
+        {triage.flags.length > 0 && (
+          <ul aria-label="Noted for your volunteer" className="flex flex-wrap gap-2">
+            {triage.flags.map((f) => (
+              <li key={f} className="rounded-full bg-brand-soft px-3 py-1 text-sm font-semibold">
+                {FLAG_LABELS[f]}
+              </li>
+            ))}
+          </ul>
+        )}
+        {triage.source === 'rules' && (
+          <p className="text-sm text-ink-soft">The AI review wasn't available, so we sorted this by keywords. Check the type of help.</p>
+        )}
+      </div>
+
+      <div className="mt-6 grid gap-3">
+        <Button type="button" variant="accent" className="text-lg" onClick={onSend} disabled={busy}>
+          {busy ? 'Sending…' : 'Send request'}
+        </Button>
+        <Button type="button" variant="quiet" onClick={onEdit} disabled={busy}>
+          Go back and edit
+        </Button>
+      </div>
+      <ErrorText error={error} />
+    </section>
+  )
+}
 
 function NewRequestForm() {
   const me = useMe()
   const [text, setText] = useState('')
   const [location, setLocation] = useState<LatLon | null>(me.data?.user.home_location ?? null)
   const [showEmergency, setShowEmergency] = useState(false)
+  const [review, setReview] = useState<{ triage: Triage; category: Category } | null>(null)
   const check = useCheckEmergency()
+  const preview = usePreviewRequest()
   const create = useCreateRequest()
+  const draft = () => ({ text: text.trim(), ...(location ? { location } : {}) })
 
-  const send = () =>
-    create.mutate(
-      { text: text.trim(), ...(location ? { location } : {}) },
-      { onSuccess: () => setShowEmergency(false) },
-    )
+  const send = (category?: Category) =>
+    create.mutate({ ...draft(), ...(category ? { category_override: category } : {}) }, { onSuccess: () => setShowEmergency(false) })
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
-    check.mutate(text.trim(), { onSuccess: ({ emergency }) => (emergency ? setShowEmergency(true) : send()) })
+    // The keyword check is instant and never waits on the AI, so the 911 screen comes first (CLAUDE.md rule 6).
+    check.mutate(text.trim(), {
+      onSuccess: ({ emergency }) => {
+        if (emergency) return setShowEmergency(true)
+        preview.mutate(draft(), { onSuccess: ({ triage }) => setReview({ triage, category: triage.category }) })
+      },
+    })
   }
 
+  if (review) {
+    return (
+      <TriageCard
+        text={text.trim()}
+        triage={review.triage}
+        category={review.category}
+        onCategory={(category) => setReview({ ...review, category })}
+        // Send the category only when the requester changed it.
+        onSend={() => send(review.category !== review.triage.category ? review.category : undefined)}
+        onEdit={() => setReview(null)}
+        busy={create.isPending}
+        error={create.error}
+      />
+    )
+  }
+
+  const busy = check.isPending || preview.isPending || create.isPending
   return (
     <form onSubmit={submit}>
       <h1 className="animate-rise text-3xl font-extrabold">What do you need help with?</h1>
@@ -54,13 +164,19 @@ function NewRequestForm() {
           <LocationPicker value={location} onChange={setLocation} />
         </div>
       </section>
-      <Button type="submit" variant="accent" className="mt-6 w-full text-lg" disabled={text.trim().length < 3 || !location || check.isPending || create.isPending}>
-        {check.isPending || create.isPending ? 'Sending…' : 'Ask for help'}
+      <Button type="submit" variant="accent" className="mt-6 w-full text-lg" disabled={text.trim().length < 3 || !location || busy}>
+        {preview.isPending ? 'Reading your request…' : busy ? 'Sending…' : 'Continue'}
       </Button>
+      {preview.isPending && (
+        <p role="status" className="mt-2 text-sm text-ink-soft">
+          Our AI is sorting your request for volunteers. This takes a few seconds.
+        </p>
+      )}
       {!location && text.trim().length >= 3 && <p className="mt-2 text-sm text-ink-soft">Set your location so a nearby volunteer can find you.</p>}
-      <ErrorText error={check.error ?? create.error} />
+      <ErrorText error={check.error ?? preview.error ?? create.error} />
       {showEmergency && (
-        <EmergencyInterstitial busy={create.isPending} onContinue={send} onBack={() => setShowEmergency(false)} />
+        // In an emergency, send straight away: the review step would only add delay, and urgency is already 5.
+        <EmergencyInterstitial busy={create.isPending} onContinue={() => send()} onBack={() => setShowEmergency(false)} />
       )}
     </form>
   )

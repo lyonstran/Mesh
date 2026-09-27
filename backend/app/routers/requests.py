@@ -13,7 +13,8 @@ from app.services import presence, ranking
 from app.services.fuzz import fuzz_point
 from app.services.geo import to_geojson
 from app.services.indexing import refresh_request_embedding
-from app.services.rules import is_emergency
+from app.services.rules import is_emergency, urgency_floor
+from app.services.triage import apply_category_override, triage
 from app.services.serialize import relation, serialize_request
 from app.services.state import Actor, check_transition
 
@@ -81,6 +82,15 @@ async def _transition(
 @router.post("/check")
 async def check(body: TextIn, _: dict = Depends(require_role(Role.requester))) -> dict:
     return {"emergency": is_emergency(body.text)}
+
+
+@router.post("/preview")
+async def preview(body: RequestCreate, user: dict = Depends(require_role(Role.requester))) -> dict:
+    """The triage card for the two-step submit (PLAN.md §9.2 step 4). Saves nothing."""
+    rule = urgency_floor(body.text, user.get("requester_flags"))
+    # TODO(hazards): pass the active hazard types at body.location once services/hazards.py exists (PLAN.md §7).
+    card = apply_category_override(await triage(body.text, [], rule, language=user.get("language", "en")), body.category_override)
+    return {"triage": card.model_dump(mode="json"), "emergency": card.emergency}
 
 
 @router.post("")
