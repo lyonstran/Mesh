@@ -2,6 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -38,6 +39,15 @@ class Settings(BaseSettings):
     realtime_mode: Literal["poll", "ws"] = "poll"
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     vector_search: Literal["auto", "atlas", "local"] = "auto"
+
+    @model_validator(mode="before")
+    @classmethod
+    def _unset_comment_values(cls, data: object) -> object:
+        """`KEY=   # TODO(HUMAN)` lines copied from .env.example load as the comment text. Treat them as unset, so a
+        placeholder never becomes a real JWT secret, invite code or API key."""
+        if isinstance(data, dict):
+            return {k: "" if isinstance(v, str) and v.strip().startswith("#") else v for k, v in data.items()}
+        return data
 
 
 @lru_cache

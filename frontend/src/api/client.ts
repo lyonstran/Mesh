@@ -35,3 +35,18 @@ export async function api<T>(path: string, { allow401, json, ...init }: ApiOptio
 }
 
 export const post = <T>(path: string, json?: unknown) => api<T>(path, { method: 'POST', json: json ?? {} })
+
+/** POST JSON and get binary back (e.g. audio). Same cookies and error shape as `api`. */
+export async function postForBlob(path: string, json: unknown): Promise<Blob> {
+  const res = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(json),
+    credentials: 'include',
+  })
+  if (!res.ok) {
+    const err = (await res.json().catch(() => null))?.error
+    throw new ApiError(res.status, err?.code ?? 'HTTP_ERROR', err?.message ?? res.statusText)
+  }
+  return res.blob()
+}
