@@ -274,3 +274,33 @@ export interface HazardReport {
   sources_failed: HazardSourceName[]
   fetched_at: string // ISO
 }
+
+/** One alert area from GET /api/hazards/region. geometry is null when NWS had no shape for it. */
+export interface RegionAlertProperties {
+  id: string | null
+  event: string
+  type: HazardType
+  level: 1 | 2 | 3
+  official: true
+  source: 'NWS'
+  headline: string | null
+  area_desc: string | null
+  expires: string | null // ISO
+  instruction: string | null
+}
+
+export interface RegionAlert {
+  type: 'Feature'
+  geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon | null
+  properties: RegionAlertProperties
+}
+
+/** GET /api/hazards/region (volunteers): Georgia's active NWS alerts as GeoJSON. */
+export interface HazardRegion {
+  type: 'FeatureCollection'
+  features: RegionAlert[]
+  area: string
+  simulated: boolean
+  sources_failed: HazardSourceName[]
+  fetched_at: string
+}

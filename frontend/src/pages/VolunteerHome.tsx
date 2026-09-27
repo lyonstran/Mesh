@@ -107,6 +107,7 @@ export default function VolunteerHome() {
           note={false}
           background
           insets={insets}
+          showAlerts
         />
       </div>
       <aside

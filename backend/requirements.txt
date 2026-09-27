@@ -10,3 +10,4 @@ python-multipart>=0.0.9
 pyyaml>=6.0
 fastembed>=0.8
 numpy>=2.0
+shapely>=2.0

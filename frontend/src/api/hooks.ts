@@ -3,6 +3,7 @@ import type {
   AddRoleBody,
   DemoUser,
   GeocodeMatch,
+  HazardRegion,
   HazardReport,
   HelpRequest,
   LatLon,
@@ -233,6 +234,17 @@ export function useHazards(point: LatLon | null | undefined) {
     queryKey: ['hazards', lat, lon],
     queryFn: () => api<HazardReport>(`/api/hazards?lat=${lat}&lon=${lon}`),
     enabled: lat !== null && lon !== null,
+    staleTime: POLL_HAZARDS_MS,
+    refetchInterval: POLL_HAZARDS_MS,
+  })
+}
+
+/** Georgia's active NWS alert areas for the volunteer map. */
+export function useHazardRegion(enabled: boolean) {
+  return useQuery({
+    queryKey: ['hazards', 'region'],
+    queryFn: () => api<HazardRegion>('/api/hazards/region'),
+    enabled,
     staleTime: POLL_HAZARDS_MS,
     refetchInterval: POLL_HAZARDS_MS,
   })

@@ -92,6 +92,8 @@ async def ensure_indexes(db: AsyncDatabase, hazard_cache_seconds: int) -> None:
 
     # hazard_cache._id (the cache key string) is indexed automatically.
     await _ensure_ttl(db, "hazard_cache", "fetched_at", hazard_cache_seconds)
+    # NWS zone shapes are refreshed after 7 days (services/hazard_region.py); keep them longer as a stale fallback.
+    await _ensure_ttl(db, "nws_zones", "fetched_at", 30 * 24 * 3600)
 
 
 async def _ensure_ttl(db: AsyncDatabase, coll: str, field: str, seconds: int) -> None:
