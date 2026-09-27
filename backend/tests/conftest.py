@@ -60,6 +60,8 @@ def isolated_settings(monkeypatch) -> Iterator[None]:
     monkeypatch.setenv("LLM_PROVIDER", "mock")
     monkeypatch.setenv("JWT_SECRET", "test-secret")
     monkeypatch.setenv("VECTOR_SEARCH", "local")
+    for key in ("MUSE_API_KEY", "ELEVENLABS_API_KEY", "ELEVENLABS_VOICE_ID"):  # no test may call a paid API
+        monkeypatch.setenv(key, "")
     embeddings.set_embedder(FakeEmbedder())
     _reset_caches()
     yield

@@ -18,7 +18,7 @@ import type {
   Role,
   Triage,
 } from '../lib/types'
-import { api, post } from './client'
+import { api, post, postForBlob } from './client'
 
 // Polling intervals from PLAN.md §0.1 (WebSocket realtime comes later).
 const POLL_REQUESTER_MS = 5_000
@@ -188,6 +188,26 @@ export function listMessages(requestId: string, after?: string) {
 
 export function sendMessage(requestId: string, text: string) {
   return post<{ message: Message }>(`/api/requests/${requestId}/messages`, { text })
+}
+
+/** Which voice features the server has keys for. Buttons for the others stay hidden. */
+export function useVoiceStatus() {
+  return useQuery({
+    queryKey: ['voice', 'status'],
+    queryFn: () => api<{ transcribe: boolean; speak: boolean }>('/api/voice/status'),
+    staleTime: 5 * 60_000,
+    retry: false,
+  })
+}
+
+export function transcribeAudio(wav: Blob) {
+  const form = new FormData()
+  form.append('audio', wav, 'recording.wav')
+  return api<{ text: string }>('/api/voice/transcribe', { method: 'POST', body: form })
+}
+
+export function speakText(text: string, language = 'en') {
+  return postForBlob('/api/voice/speak', { text, language })
 }
 
 /** Street-address search (US Census geocoder via the backend). It does not match place names. */

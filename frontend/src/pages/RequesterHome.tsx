@@ -12,6 +12,9 @@ import {
 import EmergencyInterstitial from '../components/EmergencyInterstitial'
 import HazardBanner from '../components/HazardBanner'
 import LiveTracking from '../components/LiveTracking'
+import SpeakButton from '../components/SpeakButton'
+import StatusTimeline from '../components/StatusTimeline'
+import VoiceRecorder from '../components/VoiceRecorder'
 import { LocationPicker, VolunteersMap } from '../components/map/lazy'
 import { Button, ErrorText, Field, Loading, inputClass } from '../components/ui'
 import { CATEGORY_LABELS, FLAG_LABELS, STATUS_LABELS, URGENCY_LABELS, timeAgo } from '../lib/labels'
@@ -157,6 +160,11 @@ function NewRequestForm() {
         onChange={(e) => setText(e.target.value)}
         maxLength={1000}
       />
+      {/* Spoken words are appended, so anything already typed is kept. */}
+      <VoiceRecorder
+        disabled={busy}
+        onText={(spoken) => setText((current) => (current.trim() ? `${current.trim()} ${spoken}` : spoken).slice(0, 1000))}
+      />
       <section className="mt-6">
         <h2 className="text-xl font-extrabold">Where are you?</h2>
         <p className="mt-1 text-sm text-ink-soft">
@@ -205,13 +213,22 @@ function NearbyVolunteers({ center }: { center: LatLon | null }) {
 }
 
 function ActiveRequest({ request }: { request: HelpRequest }) {
+  const me = useMe()
   const action = useRequestAction()
   const claimed = request.status === 'CLAIMED'
+  const headline = claimed ? `${request.helper?.name ?? 'A volunteer'} is helping you` : 'Your request is posted'
+  // What "Tap to hear" reads: the status, not the whole page.
+  const spoken = claimed
+    ? `${headline}. You can chat with them in Mesh.`
+    : `${headline}. Volunteers whose skills fit your request can see it now.`
 
   return (
     <section>
       <HazardBanner point={request.location ?? request.display_location} className="mb-6" />
-      <h1 className="animate-rise text-3xl font-extrabold">{claimed ? `${request.helper?.name ?? 'A volunteer'} is helping you` : 'Your request is posted'}</h1>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <h1 className="animate-rise text-3xl font-extrabold">{headline}</h1>
+        <SpeakButton text={spoken} />
+      </div>
       <p className="mt-2 text-ink-soft">
         {claimed
           ? 'Use the chat to agree on the details. You can mark it resolved when you have what you need.'
@@ -224,6 +241,8 @@ function ActiveRequest({ request }: { request: HelpRequest }) {
         </p>
         <p className="mt-2 text-lg">{request.text}</p>
       </div>
+
+      <StatusTimeline request={request} viewerId={me.data?.user.id} />
 
       {claimed && <div className="mt-6"><LiveTracking request={request} otherName={request.helper?.name ?? 'your volunteer'} /></div>}
       {request.status === 'OPEN' && <NearbyVolunteers center={request.location ?? request.display_location ?? null} />}

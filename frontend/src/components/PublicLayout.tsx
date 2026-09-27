@@ -77,7 +77,12 @@ export default function PublicLayout() {
       <footer className="border-t border-line">
         <div className="mx-auto flex max-w-5xl flex-col gap-2 px-4 py-8 text-sm text-ink-soft sm:flex-row sm:justify-between">
           <p>Mesh is not an emergency service. If anyone's life is in danger, call 911.</p>
-          <p>Built at HackGT 13.</p>
+          <p>
+            Built at HackGT 13.{' '}
+            <Link to="/about" className="font-semibold underline underline-offset-4 hover:text-ink">
+              Data sources and credits
+            </Link>
+          </p>
         </div>
       </footer>
     </div>

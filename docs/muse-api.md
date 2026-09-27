@@ -51,9 +51,42 @@ Other text endpoints exist but we don't use them yet: `POST /v1/responses` (Resp
 ### Embeddings
 **There is no embeddings endpoint or embedding model** in the Meta Model API. Mesh computes embeddings locally with fastembed (PLAN.md §0.1).
 
-### Transcription (post-MVP)
-- `TODO(HUMAN)`: **the docs conflict on the path.** The overview lists `POST /v1/asr/transcribe` (plus realtime `wss://api.meta.ai/v1/asr/realtime`). The API reference lists `POST /v1/voice/transcribe` and `POST /v1/voice/realtime`.
-- `TODO(HUMAN)`: the multipart field names, accepted audio formats, and response shape weren't shown. See https://dev.meta.ai/docs/speech-to-text.
+### Transcription
+From "Transcribe a recording" (https://dev.meta.ai/docs/api-reference/voice/transcribe) and the voice schemas page (https://dev.meta.ai/docs/api-reference/voice/schemas), read 2026-09-27:
+
+- **Path:** `POST /v1/asr/transcribe`. The API reference page lives under `/voice/`, but the documented path is `/asr/transcribe`, which resolves the earlier conflict. The live API answered on it (below).
+- **Auth:** `Authorization: Bearer $MODEL_API_KEY`.
+- **Body:** `multipart/form-data` with two parts:
+  - `request`: JSON with these fields:
+    - `model` (required): `muse-voice-transcribe-1.0`;
+    - `audioEncoding` (required): enum, `WAV` only;
+    - `mode`: `PUSH_TO_TALK` (default), `ENDPOINTING` or `DIARIZATION`;
+    - `keywords`: string[], "terms to bias recognition toward";
+    - `languageBias`: string[], "languages to bias transcription toward, each as a language name";
+    - `partialMode`: `CUMULATIVE` (default) or `DELTA`;
+    - `emitAudioProgress`: bool, default true.
+  - `audio`: the WAV file. The WAV must be "mono integer PCM at 16 kHz or 24 kHz".
+- **Limits:** 10 minutes of audio, 32 MB request body.
+- **Query:** optional `sessionId`.
+- **Response:** the `Accept` header picks `application/json` (buffered), `text/event-stream` or `text/plain`. We use JSON, which is a `TranscribeResponse`:
+  - `sessionId`;
+  - `transcript`: "final transcript for the whole clip";
+  - `audioDurationMs`;
+  - `turns[]`.
+- **Errors:**
+  - 400: unsupported audio, over 10 minutes, or bad multipart;
+  - 406: bad `Accept`;
+  - 413: body over 32 MB;
+  - 429: rate limited;
+  - 500: transcription failed or timed out.
+- **Not documented:** a language *code* field (only `languageBias` names), or any audio format other than WAV.
+
+Observed against the live API (2026-09-27):
+- A 7.1 s, 16 kHz mono WAV sent with `languageBias: ["English"]` and `Accept: application/json` returned 200 in about 3.5 s, and the transcript was word for word.
+- `turns` came back empty in `PUSH_TO_TALK` mode.
+- The real response is saved as `backend/tests/fixtures/muse_transcribe.json`.
+- Browsers record WebM/Opus (Chrome, Android) or MP4/AAC (Safari, iOS), never WAV. So the frontend decodes the recording and re-encodes it as 16 kHz mono 16-bit WAV before uploading (`frontend/src/lib/wav.ts`). No `ffmpeg` is needed on the server.
+- Realtime streaming (`/v1/asr/realtime`, `PCM_16KHZ`/`PCM_24KHZ`) exists but is unused.
 
 ## Other endpoints listed (unused)
 - Files: `POST/GET /v1/files`, `GET/DELETE /v1/files/{file_id}`
