@@ -54,6 +54,8 @@ npm run dev                       # http://localhost:5173
 
 If the database shows `error`, the usual cause is that your IP isn't allowed in Atlas or `MONGODB_URI` is wrong. The backend log shows the exact error.
 
+If the backend takes **~25 seconds to start** (common on a VPN or restrictive network), the slow part is the DNS lookup behind a `mongodb+srv://` connection string. Use the standard form instead: in Atlas, **Connect → Drivers**, choose the oldest driver version listed, and copy the `mongodb://host1,host2,host3/?...` string. Same cluster and credentials; startup drops to a couple of seconds.
+
 ### 7. Try the MVP (10 minutes)
 Use two browser windows (one normal, one private) so you can be both sides at once:
 - [ ] **Volunteer:** sign in as **Marcus (demo)** → "Requests that fit you" lists the tree and debris requests first.
