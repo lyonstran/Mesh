@@ -10,6 +10,12 @@ class Role(StrEnum):
     helper = "helper"  # shown as "Volunteer" in the UI
 
 
+def held_roles(user: dict) -> list[Role]:
+    """Profiles the user holds. Falls back to `role` for accounts created before `roles` existed."""
+    roles = user.get("roles") or ([user["role"]] if user.get("role") else [])
+    return [Role(r) for r in roles]
+
+
 class RequestStatus(StrEnum):
     OPEN = "OPEN"
     CLAIMED = "CLAIMED"
@@ -105,6 +111,12 @@ class ProfileUpdate(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=80)
     language: str | None = Field(None, min_length=2, max_length=10)
     background: str | None = Field(None, max_length=1000)
+    helper: HelperProfile | None = None
+    requester_flags: RequesterFlags | None = None
+
+
+class AddRoleIn(BaseModel):
+    role: Role
     helper: HelperProfile | None = None
     requester_flags: RequesterFlags | None = None
 

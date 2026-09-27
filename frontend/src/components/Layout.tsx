@@ -1,11 +1,19 @@
-import { Link, Outlet } from 'react-router-dom'
-import { useLogout, useMe } from '../api/hooks'
+import { Link, Outlet, useNavigate } from 'react-router-dom'
+import { useLogout, useMe, useSwitchMode } from '../api/hooks'
 import { homeFor } from '../auth/home'
+import type { Role } from '../lib/types'
+
+const MODES: { role: Role; label: string }[] = [
+  { role: 'requester', label: 'Requester' },
+  { role: 'helper', label: 'Volunteer' },
+]
 
 /** App chrome for signed-in pages. */
 export default function Layout() {
   const me = useMe()
   const logout = useLogout()
+  const switchMode = useSwitchMode()
+  const navigate = useNavigate()
   const user = me.data?.user
 
   return (
@@ -22,10 +30,30 @@ export default function Layout() {
           {user && (
             <div className="flex items-center gap-3 text-sm">
               <span className="hidden max-w-32 truncate text-white/80 sm:inline">{user.name}</span>
-              {user.role && (
-                <span className="rounded bg-porch px-1.5 py-0.5 text-xs font-semibold text-ink">
-                  {user.role === 'helper' ? 'Volunteer' : 'Requester'}
-                </span>
+              {user.role && user.roles.length > 1 ? (
+                <div role="group" aria-label="Switch mode" className="flex rounded-md bg-white/10 p-0.5 text-xs font-semibold">
+                  {MODES.map(({ role, label }) => (
+                    <button
+                      key={role}
+                      type="button"
+                      aria-pressed={user.role === role}
+                      disabled={switchMode.isPending}
+                      onClick={() => {
+                        if (user.role === role) return
+                        switchMode.mutate(role, { onSuccess: () => navigate(homeFor(role)) })
+                      }}
+                      className={`min-h-9 rounded px-2 ${user.role === role ? 'bg-porch text-ink' : 'text-white/80 hover:text-white'}`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                user.role && (
+                  <span className="rounded bg-porch px-1.5 py-0.5 text-xs font-semibold text-ink">
+                    {user.role === 'helper' ? 'Volunteer' : 'Requester'}
+                  </span>
+                )
               )}
               {user.role && (
                 <Link to="/profile" className="flex min-h-10 items-center rounded-md px-2 font-semibold whitespace-nowrap underline-offset-4 hover:underline">

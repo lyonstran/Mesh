@@ -67,7 +67,8 @@ export interface User {
   email: string | null
   name: string | null
   picture: string | null
-  role: Role | null
+  role: Role | null // active mode: decides the home page
+  roles: Role[] // profiles the account holds; endpoint guards check this, not `role`
   language: string
   background: string
   helper: HelperProfile | null
@@ -89,7 +90,15 @@ export interface OnboardingBody {
   requester_flags?: RequesterFlags
 }
 
+/** POST /api/me/roles: add the profile the account doesn't have yet. */
+export interface AddRoleBody {
+  role: Role
+  helper?: HelperProfile
+  requester_flags?: RequesterFlags
+}
+
 export interface ProfileUpdate {
+  role?: Role // switch the active mode (must be a held profile)
   name?: string
   language?: string
   background?: string

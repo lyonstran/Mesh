@@ -6,7 +6,7 @@ Every request and user that leaves the backend goes through this module.
 from datetime import datetime
 from typing import Literal
 
-from app.models import RequestStatus
+from app.models import RequestStatus, held_roles
 
 Relation = Literal["requester", "assigned_helper", "other"]
 
@@ -34,6 +34,7 @@ def public_user(user: dict) -> dict:
         "name": user.get("name"),
         "picture": user.get("picture"),
         "role": user.get("role"),
+        "roles": held_roles(user),
         "language": user.get("language", "en"),
         "background": user.get("background", ""),
         "helper": user.get("helper"),

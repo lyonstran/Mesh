@@ -11,10 +11,11 @@ from app.config import get_settings
 from app.errors import APIError
 from app.main import app
 from app.models import RequestStatus as S
+from app.models import Role, held_roles
 from app.security import create_token, decode_token
 from app.services.ranking import rank_local
 from app.services.rules import is_emergency
-from app.services.serialize import serialize_request
+from app.services.serialize import public_user, serialize_request
 from app.services.state import TRANSITIONS, check_transition
 
 # --- rules -----------------------------------------------------------------
@@ -131,6 +132,32 @@ def test_serializer_never_leaks_embeddings():
     for viewer in (REQUESTER, HELPER, OTHER_HELPER):
         out = _ser(_req(), viewer)
         assert "embedding" not in out and "embed_text" not in out
+
+
+def test_serializer_dual_profile_user_is_viewed_per_request_not_per_account():
+    """One account is the requester on request A and the assigned volunteer on request B."""
+    dual = {"_id": ObjectId(), "name": "Dana", "role": "requester", "roles": ["requester", "helper"]}
+    as_requester = _req() | {"requester_id": dual["_id"], "helper_id": HELPER["_id"]}
+    as_helper = _req() | {"requester_id": REQUESTER["_id"], "helper_id": dual["_id"]}
+    unrelated = _req(S.OPEN) | {"requester_id": REQUESTER["_id"], "helper_id": None}
+
+    assert serialize_request(as_requester, dual, requester=dual, helper=HELPER)["viewer_relation"] == "requester"
+    out = serialize_request(as_helper, dual, requester=REQUESTER, helper=dual)
+    assert out["viewer_relation"] == "assigned_helper"
+    assert out["requester"]["name"] == "Ruth"
+    out = serialize_request(unrelated, dual, requester=REQUESTER)
+    assert out["viewer_relation"] == "other"
+    assert "requester" not in out
+
+
+def test_held_roles_falls_back_to_legacy_role():
+    assert held_roles({"role": "helper"}) == [Role.helper]
+    assert held_roles({"role": "requester", "roles": ["requester", "helper"]}) == [Role.requester, Role.helper]
+    assert held_roles({"role": None}) == []
+
+
+def test_public_user_includes_roles():
+    assert public_user({"_id": ObjectId(), "role": "helper"})["roles"] == [Role.helper]
 
 
 # --- ranking -------------------------------------------------------------------

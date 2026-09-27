@@ -28,10 +28,10 @@ export function AuthGuard({ children }: { children: ReactNode }) {
   return children
 }
 
-/** Sends users with a different role to their own home page. */
+/** Sends users who don't hold this profile to their home page. The active mode doesn't matter here. */
 export function RoleGuard({ role, children }: { role: Role; children: ReactNode }) {
   const me = useMe()
-  const userRole = me.data?.user.role ?? null
-  if (userRole !== role) return <Navigate to={homeFor(userRole)} replace />
+  const user = me.data?.user
+  if (!user?.roles.includes(role)) return <Navigate to={homeFor(user?.role ?? null)} replace />
   return children
 }

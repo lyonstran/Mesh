@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type {
+  AddRoleBody,
   DemoUser,
   HelpRequest,
   MeResponse,
@@ -7,6 +8,7 @@ import type {
   OnboardingBody,
   ProfileUpdate,
   RankedResponse,
+  Role,
 } from '../lib/types'
 import { api, post } from './client'
 
@@ -83,6 +85,33 @@ export function useUpdateProfile() {
       if (data.rematching) {
         for (const delay of [10_000, 25_000]) setTimeout(() => qc.invalidateQueries({ queryKey: keys.ranked }), delay)
       }
+    },
+  })
+}
+
+/** Adds the second profile (volunteer or requester) to the signed-in account. */
+export function useAddRole() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: AddRoleBody) => post<MeResponse>('/api/me/roles', body),
+    onSuccess: (data) => {
+      qc.setQueryData(keys.me, data)
+      if (data.rematching) {
+        for (const delay of [10_000, 25_000]) setTimeout(() => qc.invalidateQueries({ queryKey: keys.ranked }), delay)
+      }
+    },
+  })
+}
+
+/** Switches the active mode (home page); the lists differ per mode, so drop their caches. */
+export function useSwitchMode() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (role: Role) => api<MeResponse>('/api/me', { method: 'PATCH', json: { role } }),
+    onSuccess: (data) => {
+      qc.setQueryData(keys.me, data)
+      qc.invalidateQueries({ queryKey: keys.mine })
+      qc.invalidateQueries({ queryKey: keys.ranked })
     },
   })
 }

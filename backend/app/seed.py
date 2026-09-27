@@ -83,6 +83,7 @@ async def seed(database) -> None:
             "email": f"demo-{n}@example.com",
             "name": spec["name"],
             "role": Role.helper,
+            "roles": [Role.helper],
             "language": spec.get("language", "en"),
             "background": spec["background"],
             "helper": spec["helper"],
@@ -102,6 +103,7 @@ async def seed(database) -> None:
             "email": f"demo-{n}@example.com",
             "name": name,
             "role": Role.requester,
+            "roles": [Role.requester],
             "language": language,
             "background": "",
             "helper": None,
@@ -131,6 +133,27 @@ async def seed(database) -> None:
         })
 
 
+    # One account with both profiles, to try the navbar mode switcher.
+    n += 1
+    dual = {
+        "google_sub": f"demo-{n}",
+        "email": f"demo-{n}@example.com",
+        "name": "Dana (demo, both profiles)",
+        "role": Role.requester,
+        "roles": [Role.requester, Role.helper],
+        "language": "en",
+        "background": "Retired paramedic who lives on the second floor and uses a cane.",
+        "helper": {"skills": ["first_aid", "cpr"], "custom_skills": [], "resources": ["medical_kit"], "about": "Can check on neighbors and give basic first aid."},
+        "requester_flags": {"medical_device": False, "mobility": True, "lives_alone": True},
+        "verified": True,
+        "demo": True,
+        "created_at": now,
+        "updated_at": now,
+    }
+    dual |= await helper_embedding_fields(dual)
+    await database.users.insert_one(dual)
+
+
 async def main() -> None:
     parser = argparse.ArgumentParser(description="Seed Mesh demo data (demo: true only)")
     parser.add_argument("--reset", action="store_true", help="delete existing demo data first")
@@ -146,7 +169,7 @@ async def main() -> None:
         elif await database.users.count_documents({"demo": True}, limit=1):
             raise SystemExit("Demo data already exists; rerun with --reset")
         await seed(database)
-        print(f"Seeded {len(HELPERS)} volunteers and {len(REQUESTERS)} requesters into '{settings.mongodb_db}'.")
+        print(f"Seeded {len(HELPERS)} volunteers, {len(REQUESTERS)} requesters and 1 dual-profile user into '{settings.mongodb_db}'.")
         if not settings.demo_login:
             print("Note: set DEMO_LOGIN=true (and VITE_DEMO_LOGIN=true) to sign in as these users.")
     finally:

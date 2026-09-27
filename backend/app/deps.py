@@ -7,7 +7,7 @@ from pymongo.asynchronous.database import AsyncDatabase
 from app import db
 from app.config import get_settings
 from app.errors import APIError
-from app.models import Role
+from app.models import Role, held_roles
 from app.security import COOKIE_NAME, decode_token
 
 
@@ -36,7 +36,7 @@ async def require_onboarded(user: dict = Depends(get_current_user)) -> dict:
 
 def require_role(*roles: Role) -> Callable[..., Awaitable[dict]]:
     async def dependency(user: dict = Depends(require_onboarded)) -> dict:
-        if user["role"] not in roles:
+        if not set(held_roles(user)) & set(roles):
             raise APIError(403, "FORBIDDEN", "Not allowed for your role")
         return user
 

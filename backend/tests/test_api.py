@@ -212,3 +212,82 @@ def test_stale_background_embedding_does_not_overwrite_newer_profile(env):
 
     asyncio.run(run_stale_job())
     assert env.raw.users.find_one({"_id": user["_id"]})["embedding"] == [1.0] * 384
+
+
+# --- one account, two profiles (PLAN.md §0.1) -----------------------------------
+
+def _dual_user(env, name="Dana", about="chainsaw and first aid", mode=Role.requester):
+    helper = {"skills": [], "custom_skills": [], "resources": [], "about": about}
+    return env.make_user(mode, name, roles=["requester", "helper"], helper=helper)
+
+
+def test_add_second_profile_then_switch_mode(env):
+    _, headers = env.make_user(Role.requester, "Ruth")
+    me = env.client.get("/api/me", headers=headers).json()["user"]
+    assert me["roles"] == ["requester"]
+
+    resp = env.client.post("/api/me/roles", json={"role": "helper", "helper": {"about": "I have a chainsaw"}}, headers=headers)
+    assert resp.status_code == 200, resp.text
+    user = resp.json()["user"]
+    assert user["roles"] == ["requester", "helper"] and user["role"] == "requester"  # mode unchanged
+    assert user["helper"]["about"] == "I have a chainsaw"
+
+    assert env.client.post("/api/me/roles", json={"role": "helper"}, headers=headers).json()["error"]["code"] == "ROLE_EXISTS"
+
+    switched = env.client.patch("/api/me", json={"role": "helper"}, headers=headers).json()["user"]
+    assert switched["role"] == "helper"
+    assert env.client.get("/api/requests/ranked", headers=headers).status_code == 200
+
+
+def test_cannot_switch_to_or_edit_a_profile_not_held(env):
+    _, headers = env.make_user(Role.requester, "Ruth")
+    resp = env.client.patch("/api/me", json={"role": "helper"}, headers=headers)
+    assert resp.status_code == 409 and resp.json()["error"]["code"] == "ROLE_NOT_HELD"
+    resp = env.client.patch("/api/me", json={"helper": {"about": "x"}}, headers=headers)
+    assert resp.status_code == 409 and resp.json()["error"]["code"] == "ROLE_NOT_HELD"
+
+
+def test_switching_mode_is_allowed_with_an_active_request(env):
+    _, headers = _dual_user(env)
+    assert env.client.post("/api/requests", json={"text": "need water and food"}, headers=headers).status_code == 200
+    assert env.client.patch("/api/me", json={"role": "helper"}, headers=headers).status_code == 200
+
+
+def test_guards_use_held_profiles_not_the_active_mode(env):
+    _, headers = _dual_user(env, mode=Role.helper)  # in volunteer mode, can still submit a request
+    assert env.client.post("/api/requests", json={"text": "need water and food"}, headers=headers).status_code == 200
+    assert env.client.get("/api/requests/ranked", headers=headers).status_code == 200
+
+
+def test_dual_user_cannot_claim_or_be_ranked_their_own_request(env):
+    _, headers = _dual_user(env)
+    rid = env.client.post("/api/requests", json={"text": "need water and food"}, headers=headers).json()["request"]["id"]
+
+    resp = env.client.post(f"/api/requests/{rid}/claim", headers=headers)
+    assert resp.status_code == 409 and resp.json()["error"]["code"] == "OWN_REQUEST"
+    assert rid not in [r["id"] for r in env.client.get("/api/requests/ranked", headers=headers).json()["requests"]]
+    # Still open, and another volunteer can claim it.
+    other = env.onboard_helper("Marcus", "water")
+    assert env.client.post(f"/api/requests/{rid}/claim", headers=other).status_code == 200
+
+
+def test_dual_user_is_requester_on_one_request_and_volunteer_on_another(env):
+    created, req_headers = _create_request(env)
+    rid = created["request"]["id"]
+    dual, dual_headers = _dual_user(env)
+    assert env.client.post(f"/api/requests/{rid}/claim", headers=dual_headers).status_code == 200
+    own = env.client.post("/api/requests", json={"text": "need water and food"}, headers=dual_headers).json()["request"]
+
+    assert env.client.get(f"/api/requests/{rid}", headers=dual_headers).json()["request"]["viewer_relation"] == "assigned_helper"
+    assert own["viewer_relation"] == "requester"
+    # The original requester sees the dual user only as the helper, never their own-request details.
+    seen = env.client.get(f"/api/requests/{rid}", headers=req_headers).json()["request"]
+    assert seen["helper"]["name"] == "Dana"
+
+
+def test_volunteer_profile_edit_reembeds_while_in_requester_mode(env):
+    dual, headers = _dual_user(env, about="")
+    resp = env.client.patch("/api/me", json={"helper": {"about": "I can drive people to shelters"}}, headers=headers)
+    assert resp.status_code == 200 and resp.json()["rematching"] is True
+    stored = env.raw.users.find_one({"_id": dual["_id"]})
+    assert stored["profile_text"] and stored.get("embedding")

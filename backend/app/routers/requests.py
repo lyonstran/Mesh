@@ -7,7 +7,7 @@ from pymongo.asynchronous.database import AsyncDatabase
 
 from app.deps import get_database, parse_object_id, require_onboarded, require_role
 from app.errors import APIError
-from app.models import ACTIVE_STATUSES, RequestCreate, RequestStatus, Role, TextIn
+from app.models import ACTIVE_STATUSES, RequestCreate, RequestStatus, Role, TextIn, held_roles
 from app.services import ranking
 from app.services.indexing import refresh_request_embedding
 from app.services.rules import is_emergency
@@ -40,7 +40,7 @@ async def _load_visible(database: AsyncDatabase, request_id: str, user: dict) ->
     req = await database.requests.find_one({"_id": parse_object_id(request_id)})
     if req is None:
         raise APIError(404, "NOT_FOUND", "Request not found")
-    if relation(req, user) == "other" and not (user["role"] == Role.helper and req["status"] == RequestStatus.OPEN):
+    if relation(req, user) == "other" and not (Role.helper in held_roles(user) and req["status"] == RequestStatus.OPEN):
         raise APIError(404, "NOT_FOUND", "Request not found")
     return req
 
@@ -123,7 +123,8 @@ async def mine(user: dict = Depends(require_onboarded), database: AsyncDatabase 
 async def ranked(user: dict = Depends(require_role(Role.helper)), database: AsyncDatabase = Depends(get_database)) -> dict:
     results = await ranking.rank_open_requests(database, user)
     return {
-        "requests": [serialize_request(r, user, score=score) for r, score in results],
+        # A user holding both profiles must not be offered their own request to claim.
+        "requests": [serialize_request(r, user, score=score) for r, score in results if r["requester_id"] != user["_id"]],
         "vector_search": ranking.mode(),
         "profile_embedded": bool(user.get("embedding")),
     }
@@ -140,7 +141,8 @@ async def claim(request_id: str, user: dict = Depends(require_role(Role.helper))
     oid = parse_object_id(request_id)
     now = datetime.now(UTC)
     req = await database.requests.find_one_and_update(
-        {"_id": oid, "status": RequestStatus.OPEN},
+        # The requester_id guard keeps the check atomic with the claim itself.
+        {"_id": oid, "status": RequestStatus.OPEN, "requester_id": {"$ne": user["_id"]}},
         {
             "$set": {"status": RequestStatus.CLAIMED, "helper_id": user["_id"], "claimed_at": now, "updated_at": now},
             "$push": {"timeline": {"status": RequestStatus.CLAIMED, "at": now, "by": user["_id"]}},
@@ -148,7 +150,10 @@ async def claim(request_id: str, user: dict = Depends(require_role(Role.helper))
         return_document=ReturnDocument.AFTER,
     )
     if req is None:
-        if await database.requests.count_documents({"_id": oid}, limit=1):
+        existing = await database.requests.find_one({"_id": oid}, {"requester_id": 1})
+        if existing:
+            if existing["requester_id"] == user["_id"]:
+                raise APIError(409, "OWN_REQUEST", "You can't pick up your own request")
             raise APIError(409, "ALREADY_CLAIMED", "Someone else already picked this request")
         raise APIError(404, "NOT_FOUND", "Request not found")
     return {"request": await _serialize_one(database, req, user)}

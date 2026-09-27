@@ -55,6 +55,15 @@ The MVP is a working prototype the team builds on afterwards. Both sides are reg
   3. Submits a request. Emergency phrases trigger the 911 interstitial first (§9.2 step 5, keyword rules only).
   4. When a volunteer picks it, sees the private chat with that volunteer.
 
+### One account, two profiles
+A user can hold both a Volunteer profile and a Requester profile on the same account.
+- Onboarding still picks one role. The second profile is added later from `/profile` ("Become a volunteer" / "Request help") via `POST /api/me/roles`.
+- `users.roles` lists the profiles held; `users.role` is the **active mode**, which only decides the home page (`/r` or `/h`). Users with both profiles switch mode from the navbar (`PATCH /api/me {role}`).
+- Endpoint guards check the profiles held, not the active mode.
+- Switching mode is always allowed, including with an active request, because it deletes nothing.
+- A user cannot claim, or see in their ranked list, their own request (409 `OWN_REQUEST`).
+- `background` is one shared field. The volunteer embedding and the requester's view for a claiming volunteer both use it.
+
 ### In scope
 - Google auth, JWT cookie, and demo login (§6).
 - Onboarding and profile editing.
@@ -91,13 +100,14 @@ Location, fuzzing, and maps; hazards and simulation; EJI and tracts; triage cate
 | GET | `/api/me` | authed | |
 | GET/POST | `/api/auth/demo-users`, `/api/auth/demo` | public | 404 unless `DEMO_LOGIN` |
 | POST | `/api/onboarding` | authed | role `requester` or `helper` |
-| PATCH | `/api/me` | onboarded | re-embeds volunteer profile |
+| PATCH | `/api/me` | onboarded | re-embeds volunteer profile; `role` switches the active mode to a held profile (409 `ROLE_NOT_HELD`) |
+| POST | `/api/me/roles` | onboarded | adds the missing profile (`helper` or `requester_flags`); 409 `ROLE_EXISTS` |
 | POST | `/api/requests/check` | requester | `{text}` → `{emergency}`; no save |
 | POST | `/api/requests` | requester | max 1 active → 409 |
 | GET | `/api/requests/mine` | onboarded | requester: own; volunteer: claimed |
-| GET | `/api/requests/ranked` | volunteer | `OPEN` requests + similarity score |
+| GET | `/api/requests/ranked` | volunteer | `OPEN` requests + similarity score; excludes the caller's own requests |
 | GET | `/api/requests/{id}` | per serializer | |
-| POST | `/api/requests/{id}/claim` | volunteer | atomic; 409 `ALREADY_CLAIMED` |
+| POST | `/api/requests/{id}/claim` | volunteer | atomic; 409 `ALREADY_CLAIMED`; 409 `OWN_REQUEST` |
 | POST | `/api/requests/{id}/release` | assigned volunteer | back to `OPEN` |
 | POST | `/api/requests/{id}/resolve` | requester or assigned volunteer | |
 | POST | `/api/requests/{id}/cancel` | requester | |
@@ -391,7 +401,8 @@ hvm_rank: null         # health vulnerability module
 - `requester_flags` are optional. The UI must explain that they are shared only with a helper who has claimed the user's request.
 
 **Other user endpoints:**
-- `PATCH /api/me`: edit the profile and switch roles (requester ⇄ helper). A user cannot switch to coordinator without the code.
+- `PATCH /api/me`: edit the profile and switch the active mode between held profiles (requester ⇄ helper). A user cannot switch to coordinator without the code.
+- `POST /api/me/roles`: add the second (requester or helper) profile to the account. `users.roles` holds every profile the user has; `require_role` checks it (see §0.1, "One account, two profiles").
 - `POST /api/me/duty {on_duty: bool}`: helpers only.
 
 **Enums:**
