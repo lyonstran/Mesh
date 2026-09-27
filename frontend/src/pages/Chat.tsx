@@ -4,6 +4,7 @@ import { ApiError } from '../api/client'
 import { listMessages, sendMessage, useMe, useRequest, useRequestAction } from '../api/hooks'
 import { homeFor } from '../auth/home'
 import LiveTracking from '../components/LiveTracking'
+import { RequestTags, RequestText } from '../components/RequestTags'
 import { Button, ErrorText, Loading, inputClass } from '../components/ui'
 import { STATUS_LABELS } from '../lib/labels'
 import type { HelpRequest, Message, RequesterFlags } from '../lib/types'
@@ -53,11 +54,16 @@ function RequestSummary({ request }: { request: HelpRequest }) {
   const flags = request.requester?.requester_flags
   const activeFlags = flags ? (Object.keys(FLAG_TEXT) as (keyof RequesterFlags)[]).filter((k) => flags[k]) : []
   return (
-    <details className="rounded-xl bg-surface p-4" open>
+    <details className="rounded-2xl border border-line bg-surface p-4" open>
       <summary className="cursor-pointer font-semibold">Request</summary>
-      <p className="mt-2">{request.text}</p>
+      <div className="mt-3">
+        <RequestTags request={request} showFlags />
+      </div>
+      <div className="mt-2">
+        <RequestText request={request} size="base" />
+      </div>
       {request.requester?.background && <p className="mt-2 text-sm text-ink-soft">About them: {request.requester.background}</p>}
-      {activeFlags.length > 0 && (
+      {activeFlags.length > 0 && !request.flags?.length && (
         <ul className="mt-2 flex flex-wrap gap-2">
           {activeFlags.map((k) => (
             <li key={k} className="rounded-full bg-brand-soft px-3 py-1 text-sm font-semibold">
@@ -126,10 +132,10 @@ export default function Chat() {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <Link to={home} className="text-sm font-semibold underline underline-offset-4">
-          Back
+        <Link to={home} className="inline-flex min-h-10 items-center gap-1 rounded-lg text-sm font-semibold text-ink-soft hover:text-ink">
+          <span aria-hidden>←</span> Back
         </Link>
-        <h1 className="mt-2 text-2xl font-extrabold">{other ? `Chat with ${other}` : 'Chat'}</h1>
+        <h1 className="mt-1 text-2xl font-extrabold tracking-tight">{other ? `Chat with ${other}` : 'Chat'}</h1>
         <p className="text-sm text-ink-soft">{STATUS_LABELS[request.status]}. Only the two of you can see this chat.</p>
       </div>
 

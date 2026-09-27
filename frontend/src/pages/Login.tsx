@@ -31,10 +31,11 @@ export default function Login() {
 
   return (
     <main className="animate-rise mx-auto max-w-md px-4 py-12">
-      <h1 className="text-3xl font-extrabold">Log in to Mesh</h1>
+      <img src="/logo.png" alt="" className="h-14 w-14 object-contain mix-blend-multiply" />
+      <h1 className="mt-4 text-3xl font-extrabold tracking-tight">Log in to Mesh</h1>
       <p className="mt-2 text-ink-soft">New here? Logging in creates your account; you'll choose whether you need help or can help next.</p>
 
-      <section className="mt-8 rounded-xl bg-surface p-5 shadow-[0_1px_0_var(--color-line)]">
+      <section className="mt-8 rounded-2xl border border-line bg-surface p-6 shadow-[0_16px_40px_-24px_rgba(30,42,71,0.35)]">
         <div className="min-h-11">
           {GOOGLE_CLIENT_ID ? (
             <GoogleLogin

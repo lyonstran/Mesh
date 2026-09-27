@@ -13,6 +13,7 @@ import EmergencyInterstitial from '../components/EmergencyInterstitial'
 import HazardBanner from '../components/HazardBanner'
 import LiveTracking from '../components/LiveTracking'
 import SpeakButton from '../components/SpeakButton'
+import { RequestTags, RequestText } from '../components/RequestTags'
 import StatusTimeline from '../components/StatusTimeline'
 import VoiceRecorder from '../components/VoiceRecorder'
 import { LocationPicker, VolunteersMap } from '../components/map/lazy'
@@ -225,8 +226,12 @@ function ActiveRequest({ request }: { request: HelpRequest }) {
   return (
     <section>
       <HazardBanner point={request.location ?? request.display_location} className="mb-6" />
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <h1 className="animate-rise text-3xl font-extrabold">{headline}</h1>
+      <p className="animate-rise inline-flex items-center gap-2 rounded-full bg-surface px-3 py-1 text-sm font-semibold text-ink-soft ring-1 ring-line">
+        <span aria-hidden className={`size-2 rounded-full bg-brand ${claimed ? '' : 'animate-pulse'}`} />
+        {STATUS_LABELS[request.status]}
+      </p>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+        <h1 className="animate-rise text-3xl font-extrabold tracking-tight">{headline}</h1>
         <SpeakButton text={spoken} />
       </div>
       <p className="mt-2 text-ink-soft">
@@ -235,11 +240,20 @@ function ActiveRequest({ request }: { request: HelpRequest }) {
           : 'Volunteers whose skills fit your request can see it now. This page updates on its own.'}
       </p>
 
-      <div className={`animate-rise stagger mt-6 rounded-xl bg-surface p-5 ${claimed ? 'border-l-4 border-brand' : ''}`} style={stagger(1)}>
-        <p className="text-sm font-semibold text-ink-soft">
-          {STATUS_LABELS[request.status]}, posted {timeAgo(request.created_at)}
-        </p>
-        <p className="mt-2 text-lg">{request.text}</p>
+      <div
+        className={`animate-rise stagger mt-6 rounded-2xl border border-line bg-surface p-5 shadow-[0_12px_28px_-20px_rgba(30,42,71,0.35)] ${claimed ? 'border-l-4 border-l-brand' : ''}`}
+        style={stagger(1)}
+      >
+        <div className="flex items-baseline justify-between gap-3 text-xs">
+          <p className="font-bold tracking-wide text-ink-soft uppercase">Your request</p>
+          <p className="text-ink-soft">Posted {timeAgo(request.created_at)}</p>
+        </div>
+        <div className="mt-3">
+          <RequestTags request={request} showFlags />
+        </div>
+        <div className="mt-3">
+          <RequestText request={request} />
+        </div>
       </div>
 
       <StatusTimeline request={request} viewerId={me.data?.user.id} />
