@@ -16,7 +16,10 @@ from app.services.embeddings import embed_for_matching
 from app.services.fuzz import fuzz_point
 from app.services.geo import destination, to_geojson
 from app.services.profile import helper_embedding_fields
-from app.services.rules import is_emergency
+from app.services import priority
+from app.services.rules import urgency_floor
+from app.services.tracts import tract_for_point
+from app.services.triage import triage
 
 HELPERS = [
     {
@@ -84,9 +87,13 @@ def place(i: int) -> dict:
 
 
 async def reset(database) -> None:
-    demo_requests = await database.requests.find({"demo": True}, {"_id": 1}).to_list()
-    await database.messages.delete_many({"request_id": {"$in": [r["_id"] for r in demo_requests]}})
-    await database.requests.delete_many({"demo": True})
+    # Also requests demo accounts made in the UI (they aren't flagged demo), so none are left pointing at deleted users.
+    demo_user_ids = [u["_id"] for u in await database.users.find({"demo": True}, {"_id": 1}).to_list()]
+    requests_filter = {"$or": [{"demo": True}, {"requester_id": {"$in": demo_user_ids}}]}
+    demo_requests = [r["_id"] for r in await database.requests.find(requests_filter, {"_id": 1}).to_list()]
+    await database.messages.delete_many({"request_id": {"$in": demo_requests}})
+    await database.presence.delete_many({"request_id": {"$in": demo_requests}})
+    await database.requests.delete_many({"_id": {"$in": demo_requests}})
     await database.users.delete_many({"demo": True})
 
 
@@ -115,6 +122,7 @@ async def seed(database) -> None:
         user |= await helper_embedding_fields(user)
         await database.users.insert_one(user)
 
+    weights = await priority.load_weights(database)
     for i, (name, language, flags, text) in enumerate(REQUESTERS):
         n += 1
         user = {
@@ -139,6 +147,16 @@ async def seed(database) -> None:
         embed_text, vector = await embed_for_matching(text, "request")
         request_id = ObjectId()
         exact = user["home_location"]
+        # Same triage, EJI and priority steps as routers/requests.py create(), so demo requests look like real ones.
+        # Uses Muse when LLM_PROVIDER=muse, otherwise the keyword rules. Hazards are left at 0: a snapshot taken at
+        # seed time would be stale by the demo.
+        card = await triage(text, [], urgency_floor(text, user["requester_flags"]), language=language)
+        lon, lat = exact["coordinates"]
+        tract = await tract_for_point(database, lat, lon)
+        eji_rank = tract.get("eji_rank") if tract else None
+        score, breakdown = priority.compute(
+            urgency=card.urgency, hazard_level=0, eji_rank=eji_rank, created_at=created, now=created, is_open=True, weights=weights
+        )
         fuzzed = fuzz_point(exact["coordinates"][1], exact["coordinates"][0], str(request_id), get_settings().jwt_secret)
         await database.requests.insert_one({
             "_id": request_id,
@@ -147,7 +165,20 @@ async def seed(database) -> None:
             "requester_id": user["_id"],
             "text": text,
             "language": language,
-            "emergency": is_emergency(text),
+            "emergency": card.emergency,
+            "category": card.category,
+            "urgency": card.urgency,
+            "urgency_rule_floor": card.urgency_rule_floor,
+            "flags": list(card.flags),
+            "needs": card.needs,
+            "summary": card.summary,
+            "triage_source": card.source,
+            "tract_geoid": tract["geoid"] if tract else None,
+            "eji_rank": eji_rank,
+            "hazard_snapshot": None,
+            "hazard_level": 0,
+            "priority": score,
+            "priority_breakdown": breakdown,
             "status": RequestStatus.OPEN,
             "helper_id": None,
             "embed_text": embed_text,
