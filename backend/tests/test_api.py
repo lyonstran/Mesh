@@ -63,6 +63,19 @@ def test_emergency_check_and_flag(env):
     assert resp["show_911"] is True and resp["request"]["emergency"] is True
 
 
+def test_preview_returns_triage_without_saving(env):
+    user, headers = env.make_user(Role.requester, "Ruth", requester_flags={"medical_device": True, "mobility": False, "lives_alone": False})
+    resp = env.client.post("/api/requests/preview", json={"text": "My oxygen concentrator needs power", "category_override": "medical_supplies"}, headers=headers)
+    assert resp.status_code == 200, resp.text
+    card = resp.json()["triage"]
+    assert card["category"] == "medical_supplies" and card["urgency"] >= 4 and "medical_device" in card["flags"]
+    assert resp.json()["emergency"] is False
+    assert env.raw.requests.count_documents({"requester_id": user["_id"]}) == 0
+    assert env.client.post("/api/requests/preview", json={"text": "hay un incendio"}, headers=headers).json()["emergency"] is True
+    _, helper_headers = env.make_user(Role.helper, "Helper")
+    assert env.client.post("/api/requests/preview", json={"text": "need water"}, headers=helper_headers).status_code == 403
+
+
 def test_claim_race_only_one_wins(env):
     created, _ = _create_request(env)
     rid = created["request"]["id"]

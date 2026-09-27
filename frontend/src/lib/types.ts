@@ -173,6 +173,44 @@ export interface HelpRequest {
   requester?: RequesterDetails | null // assigned volunteer's view
 }
 
+export const CATEGORIES = [
+  'power',
+  'water',
+  'food',
+  'medical_supplies',
+  'transport',
+  'shelter',
+  'cooling',
+  'warming',
+  'debris',
+  'respiratory',
+  'welfare_check',
+  'supplies',
+  'other',
+] as const
+export type Category = (typeof CATEGORIES)[number]
+
+export type TriageFlag = 'medical_device' | 'mobility' | 'elderly' | 'lives_alone' | 'infant' | 'language_barrier'
+
+/** POST /api/requests/preview: rules merged with AI. Urgency is never below urgency_rule_floor. */
+export interface Triage {
+  category: Category
+  urgency: number // 1-5
+  urgency_rule_floor: number // 1-5
+  emergency: boolean
+  flags: TriageFlag[]
+  needs: string[]
+  summary: string
+  language: string
+  source: 'ai' | 'rules' // 'rules' when the AI was off or failed
+}
+
+export interface RequestCreateBody {
+  text: string
+  location?: LatLon
+  category_override?: Category // the requester's pick on the preview card; never changes urgency
+}
+
 export interface RankedResponse {
   requests: HelpRequest[]
   vector_search: VectorSearchMode

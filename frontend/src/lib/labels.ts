@@ -1,4 +1,4 @@
-import type { RequestStatus, Resource, Skill } from './types'
+import type { Category, RequestStatus, Resource, Skill, TriageFlag } from './types'
 
 export const SKILL_LABELS: Record<Skill, string> = {
   first_aid: 'First aid',
@@ -33,6 +33,39 @@ export const LANGUAGES: { code: string; label: string }[] = [
   { code: 'es', label: 'Español' },
   { code: 'other', label: 'Other' },
 ]
+
+export const CATEGORY_LABELS: Record<Category, string> = {
+  power: 'Power',
+  water: 'Drinking water',
+  food: 'Food',
+  medical_supplies: 'Medicine or medical supplies',
+  transport: 'A ride',
+  shelter: 'Shelter',
+  cooling: 'Cooling off',
+  warming: 'Staying warm',
+  debris: 'Trees or debris',
+  respiratory: 'Smoke or breathing',
+  welfare_check: 'Checking on someone',
+  supplies: 'Supplies',
+  other: 'Something else',
+}
+
+export const URGENCY_LABELS: Record<number, string> = {
+  1: 'Can wait a few days',
+  2: 'Needed within a day',
+  3: 'Needed within hours',
+  4: 'Health or safety at risk',
+  5: 'Life in danger',
+}
+
+export const FLAG_LABELS: Record<TriageFlag, string> = {
+  medical_device: 'Relies on a medical device',
+  mobility: 'Limited mobility',
+  elderly: 'Older adult',
+  lives_alone: 'Lives alone',
+  infant: 'Infant',
+  language_barrier: 'Language help needed',
+}
 
 export const STATUS_LABELS: Record<RequestStatus, string> = {
   OPEN: 'Waiting for a volunteer',

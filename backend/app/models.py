@@ -1,6 +1,7 @@
 """Enums and request/response bodies for the MVP (PLAN.md §0.1). Mirror in frontend/src/lib/types.ts."""
 
 from enum import StrEnum
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -138,9 +139,53 @@ class TextIn(BaseModel):
     text: str = Field(min_length=1, max_length=1000)
 
 
+class Category(StrEnum):
+    """Request categories (PLAN.md §9.1)."""
+
+    power = "power"
+    water = "water"
+    food = "food"
+    medical_supplies = "medical_supplies"
+    transport = "transport"
+    shelter = "shelter"
+    cooling = "cooling"
+    warming = "warming"
+    debris = "debris"
+    respiratory = "respiratory"
+    welfare_check = "welfare_check"
+    supplies = "supplies"
+    other = "other"
+
+
+class TriageFlag(StrEnum):
+    """Vulnerability flags on a request (PLAN.md §9.1)."""
+
+    medical_device = "medical_device"
+    mobility = "mobility"
+    elderly = "elderly"
+    lives_alone = "lives_alone"
+    infant = "infant"
+    language_barrier = "language_barrier"
+
+
+class Triage(BaseModel):
+    """The triage card: rules merged with the LLM (PLAN.md §9.2). Urgency is never below the rule floor."""
+
+    category: Category
+    urgency: int = Field(ge=1, le=5)
+    urgency_rule_floor: int = Field(ge=1, le=5)
+    emergency: bool
+    flags: list[TriageFlag]
+    needs: list[str]
+    summary: str
+    language: str
+    source: Literal["ai", "rules"]  # "rules" when the LLM was skipped or failed
+
+
 class RequestCreate(BaseModel):
     text: str = Field(min_length=3, max_length=1000)
     location: GeoPoint | None = None  # optional so the API degrades gracefully; the app asks for it
+    category_override: Category | None = None  # the requester's pick on the preview card; never changes urgency
 
 
 class MessageCreate(BaseModel):
