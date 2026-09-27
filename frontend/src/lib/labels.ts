@@ -1,4 +1,4 @@
-import type { Category, HazardType, RequestStatus, Resource, Skill, TriageFlag } from './types'
+import type { Category, EjiBand, HazardType, MatchFactorKey, MatchFlag, RequestStatus, Resource, Skill, TriageFlag } from './types'
 
 export const SKILL_LABELS: Record<Skill, string> = {
   first_aid: 'First aid',
@@ -84,6 +84,27 @@ export const HAZARD_LEVEL_LABELS: Record<number, string> = {
   1: 'Minor hazard',
   2: 'Elevated hazard',
   3: 'Severe hazard',
+}
+
+export const MATCH_FACTOR_LABELS: Record<MatchFactorKey, string> = {
+  fit: 'Fits your skills',
+  proximity: 'Close to you',
+  need: 'Need',
+}
+
+export const MATCH_FLAG_TEXT: Record<MatchFlag, string> = {
+  no_embedding: "Your profile or this request isn't indexed yet, so fit counts as average.",
+  no_home_location: 'Set your home location to rank by distance. Until then distance counts as average.',
+  no_request_location: "This request has no location, so distance counts as average.",
+}
+
+/** Coarse area labels shown instead of the EJI rank (team plan P1-5). */
+export const EJI_BAND_TEXT: Record<EjiBand, string> = {
+  'Very high': 'Very high-vulnerability area',
+  High: 'Higher-vulnerability area',
+  Moderate: 'Moderate-vulnerability area',
+  Lower: 'Lower-vulnerability area',
+  Unknown: 'Area vulnerability unknown',
 }
 
 export const STATUS_LABELS: Record<RequestStatus, string> = {

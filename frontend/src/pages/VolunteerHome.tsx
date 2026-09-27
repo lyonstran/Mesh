@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { ApiError } from '../api/client'
 import { useMe, useMyRequests, useRanked, useRequestAction } from '../api/hooks'
 import HazardBanner from '../components/HazardBanner'
+import PriorityBreakdown from '../components/PriorityBreakdown'
 import { RequestsMap } from '../components/map/lazy'
 import { Button, ErrorText, Loading } from '../components/ui'
 import { stagger } from '../lib/motion'
@@ -10,11 +11,14 @@ import { useMediaQuery } from '../lib/useMediaQuery'
 import { timeAgo } from '../lib/labels'
 import type { RankedRequest } from '../lib/types'
 
-/** Blended match score (fit + distance + need, 0-1) as a filled green bar. */
+/**
+ * Blended match score (fit + distance + need, 0-1) as a filled green bar. Fixed height and pinned to the top,
+ * so it reads the same on every card and doesn't stretch when the card grows (e.g. "Why this rank?" opens).
+ */
 function MatchBar({ score }: { score: number }) {
   const strength = Math.min(1, Math.max(0.08, score))
   return (
-    <div className="relative w-2 shrink-0 overflow-hidden rounded-full bg-brand-soft" aria-hidden>
+    <div className="relative h-28 w-2 shrink-0 self-start overflow-hidden rounded-full bg-brand-tint ring-1 ring-brand-strong/30 ring-inset" aria-hidden>
       <div className="animate-grow absolute inset-x-0 bottom-0 origin-bottom rounded-full bg-brand" style={{ height: `${strength * 100}%` }} />
     </div>
   )
@@ -27,6 +31,7 @@ function RankedItem({
   onSelect,
   onClaim,
   busy,
+  weightsNote,
 }: {
   request: RankedRequest
   rank: number
@@ -34,8 +39,11 @@ function RankedItem({
   onSelect: () => void
   onClaim: () => void
   busy: boolean
+  weightsNote: string
 }) {
   const ref = useRef<HTMLLIElement>(null)
+  const [whyOpen, setWhyOpen] = useState(false)
+  const whyId = `why-${request.id}`
   useEffect(() => {
     if (selected) ref.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })
   }, [selected])
@@ -59,9 +67,35 @@ function RankedItem({
         {request.emergency && (
           <p className="mt-2 text-sm font-semibold text-alert">May be an emergency. The requester was shown the option to call 911.</p>
         )}
-        <Button variant={rank === 1 ? 'accent' : 'quiet'} className="mt-3" onClick={onClaim} disabled={busy}>
-          Help with this
-        </Button>
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+          <Button
+            variant={rank === 1 ? 'accent' : 'quiet'}
+            onClick={(e) => {
+              e.stopPropagation()
+              onClaim()
+            }}
+            disabled={busy}
+          >
+            Help with this
+          </Button>
+          <button
+            type="button"
+            aria-expanded={whyOpen}
+            aria-controls={whyId}
+            onClick={(e) => {
+              e.stopPropagation() // don't also select the card and move the map
+              setWhyOpen((o) => !o)
+            }}
+            className="cursor-pointer text-sm font-semibold underline underline-offset-4"
+          >
+            {whyOpen ? 'Hide why' : 'Why this rank?'}
+          </button>
+        </div>
+        {whyOpen && (
+          <div id={whyId} className="mt-3" onClick={(e) => e.stopPropagation()}>
+            <PriorityBreakdown breakdown={request.breakdown} note={weightsNote} />
+          </div>
+        )}
       </div>
     </li>
   )
@@ -205,6 +239,7 @@ export default function VolunteerHome() {
               onSelect={() => setSelectedId(r.id)}
               onClaim={() => claim(r.id)}
               busy={claimingId !== null}
+              weightsNote={ranked.data.weights_note}
             />
           ))}
         </ol>
