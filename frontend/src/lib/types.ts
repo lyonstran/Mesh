@@ -162,10 +162,16 @@ export interface HelpRequest {
   created_at: string
   updated_at: string
   viewer_relation: 'requester' | 'assigned_helper' | 'other'
+  // Triage (null on requests saved before triage existed). Everyone sees these.
+  category: Category | null
+  urgency: number | null // 1-5
+  summary: string | null
+  needs: string[]
   score?: number
   display_location?: LatLon // fuzzed (300-500 m); everyone sees this
   // Only for the requester and the assigned volunteer:
   location?: LatLon // exact
+  flags?: TriageFlag[] // vulnerability flags
   claimed_at?: string | null
   resolved_at?: string | null
   timeline?: TimelineEntry[]

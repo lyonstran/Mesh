@@ -75,6 +75,11 @@ def serialize_request(
         "created_at": _iso(req.get("created_at")),
         "updated_at": _iso(req.get("updated_at")),
         "viewer_relation": rel,
+        # Triage fields every volunteer may see (PLAN.md §9.6). Requests saved before triage have none of them.
+        "category": req.get("category"),
+        "urgency": req.get("urgency"),
+        "summary": req.get("summary"),
+        "needs": req.get("needs") or [],
     }
     if score is not None:
         out["score"] = round(score, 4)
@@ -87,6 +92,8 @@ def serialize_request(
         out["location"] = exact
 
     out |= {
+        # Vulnerability flags only for the two people on the request; never tract, EJI or hazard internals.
+        "flags": req.get("flags") or [],
         "claimed_at": _iso(req.get("claimed_at")),
         "resolved_at": _iso(req.get("resolved_at")),
         "timeline": [

@@ -82,8 +82,33 @@ def rule_category(text: str) -> Category | None:
     return next((cat for cat, pattern in _CATEGORY_RES if pattern.search(normalized)), None)
 
 
+# HIGH terms (PLAN.md §9.2 step 1): floor 4 and the matching flag. EN + ES, matched like the emergency patterns.
+# Spanish "ventilador" alone also means "fan", so only the unambiguous forms count for a ventilator.
+HIGH_PATTERNS: list[tuple[TriageFlag, list[str]]] = [
+    (TriageFlag.medical_device, [
+        r"oxygen", r"concentrator", r"dialysis", r"insulin", r"ventilator", r"\bcpap\b",
+        r"oxigeno", r"concentrador", r"dialisis", r"insulina", r"respirador", r"ventilador mecanico",
+    ]),
+    (TriageFlag.mobility, [
+        r"wheelchair", r"bedridden", r"bed-bound", r"bedbound", r"can'?t walk", r"cannot walk",
+        r"silla de ruedas", r"encamad[oa]", r"postrad[oa]", r"no puede caminar", r"no puedo caminar",
+    ]),
+    (TriageFlag.infant, [r"\binfants?\b", r"\bbaby\b", r"\bbabies\b", r"newborn", r"\bbebes?\b", r"recien nacid[oa]"]),
+]
+_HIGH_RES = [(flag, re.compile("|".join(patterns))) for flag, patterns in HIGH_PATTERNS]
+
+# "Elderly alone": an older person and being alone in the same sentence, in either order.
+_OLDER = (
+    r"(\belderly\b|\bolder (man|woman|person|adult|lady|gentleman|neighbor|relative)|\bseniors?\b"
+    r"|\bgrand(mother|father|ma|pa)\b|\b(i am|i'm|she'?s|he'?s|is) (7|8|9)\d\b"  # matched against lowercased text
+    r"|\bancian[oa]s?\b|persona mayor|adulto mayor|\babuel[oa]s?\b)"
+)
+_ALONE = r"(\balone\b|by (her|him|my|them)sel(f|ves)|\bsol[oa]s?\b)"
+_ELDERLY_ALONE_RE = re.compile(rf"{_OLDER}[^.!?]{{0,60}}{_ALONE}|{_ALONE}[^.!?]{{0,60}}{_OLDER}")
+
 # Stored requester_flags raise the floor (PLAN.md §9.2 step 1).
 _FLAG_FLOORS: dict[TriageFlag, int] = {TriageFlag.medical_device: 4, TriageFlag.mobility: 3, TriageFlag.lives_alone: 3}
+HIGH_FLOOR = 4
 
 
 @dataclass(frozen=True)
@@ -96,13 +121,21 @@ class RuleResult:
     category: Category | None
 
 
+def high_need_flags(text: str) -> frozenset[TriageFlag]:
+    """Flags from HIGH terms in the text. Any of them sets the floor to 4."""
+    normalized = _normalize(text)
+    flags = {flag for flag, pattern in _HIGH_RES if pattern.search(normalized)}
+    if _ELDERLY_ALONE_RE.search(normalized):
+        flags |= {TriageFlag.elderly, TriageFlag.lives_alone}
+    return frozenset(flags)
+
+
 def urgency_floor(text: str, requester_flags: dict | None = None) -> RuleResult:
-    # TODO(P1): this is the rules.urgency_floor contract from the team plan. Add the HIGH terms from
-    # PLAN.md §9.2 step 1 (oxygen, concentrator, dialysis, insulin, ventilator,
-    # wheelchair, bedridden, infant/baby, elderly alone → floor 4 plus their flags). Keep this signature.
+    """The rules.urgency_floor contract: emergency terms → 5, HIGH terms → 4, stored flags → 4 or 3, else 1."""
     emergency = is_emergency(text)
-    flags = frozenset(f for f in _FLAG_FLOORS if (requester_flags or {}).get(f))
-    floor = max([1, *(_FLAG_FLOORS[f] for f in flags)])
+    stored = frozenset(f for f in _FLAG_FLOORS if (requester_flags or {}).get(f))
+    from_text = high_need_flags(text)
+    floor = max([1, *(_FLAG_FLOORS[f] for f in stored), *([HIGH_FLOOR] if from_text else [])])
     if emergency:
         floor = 5
-    return RuleResult(floor=floor, emergency=emergency, flags=flags, category=rule_category(text))
+    return RuleResult(floor=floor, emergency=emergency, flags=stored | from_text, category=rule_category(text))

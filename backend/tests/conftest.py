@@ -13,7 +13,7 @@ from app.ai.provider import get_provider
 from app.config import get_settings
 from app.models import Role
 from app.security import COOKIE_NAME, create_token
-from app.services import embeddings, ranking
+from app.services import embeddings, hazards, preview_cache, ranking
 
 
 class FakeEmbedder:
@@ -34,6 +34,23 @@ def _reset_caches() -> None:
     get_settings.cache_clear()
     get_provider.cache_clear()
     ranking.reset()
+    preview_cache.clear()
+
+
+CALM_REPORT = hazards.build_report({"features": []}, {"current": {}, "hourly": {}}, {"current": {}})
+
+
+@pytest.fixture(autouse=True)
+def no_hazard_network(request, monkeypatch) -> None:
+    """Keep API tests off the real NWS/Open-Meteo. test_hazards.py exercises fetching itself with a mock transport.
+    Tests can monkeypatch hazards.fetch_report to return a specific report."""
+    if request.module.__name__.endswith("test_hazards"):
+        return
+
+    async def calm(lat, lon, client=None):
+        return CALM_REPORT
+
+    monkeypatch.setattr(hazards, "fetch_report", calm)
 
 
 @pytest.fixture(autouse=True)

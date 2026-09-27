@@ -8,15 +8,17 @@ from pymongo.asynchronous.database import AsyncDatabase
 from app.config import get_settings
 from app.deps import get_database, parse_object_id, require_onboarded, require_role
 from app.errors import APIError
-from app.models import ACTIVE_STATUSES, RequestCreate, RequestStatus, Role, TextIn, held_roles
-from app.services import presence, ranking
+from app.models import ACTIVE_STATUSES, RequestCreate, RequestStatus, Role, TextIn, Triage, held_roles
+from app.services import preview_cache, presence, priority, ranking
 from app.services.fuzz import fuzz_point
 from app.services.geo import to_geojson
+from app.services.hazards import get_hazards
 from app.services.indexing import refresh_request_embedding
-from app.services.rules import is_emergency, urgency_floor
-from app.services.triage import apply_category_override, triage
+from app.services.rules import RuleResult, is_emergency, urgency_floor
+from app.services.triage import apply_category_override, merge, triage
 from app.services.serialize import relation, serialize_request
 from app.services.state import Actor, check_transition
+from app.services.tracts import tract_for_point
 
 router = APIRouter(prefix="/api/requests")
 
@@ -84,12 +86,39 @@ async def check(body: TextIn, _: dict = Depends(require_role(Role.requester))) -
     return {"emergency": is_emergency(body.text)}
 
 
+async def _hazards_at(database: AsyncDatabase, body: RequestCreate) -> dict | None:
+    return await get_hazards(database, body.location.lat, body.location.lon) if body.location else None
+
+
+def _hazard_types(report: dict | None) -> list[str]:
+    return sorted({h["type"] for h in (report or {}).get("hazards", [])})
+
+
+def _reconcile(card: Triage, rule: RuleResult) -> Triage:
+    """Re-apply today's rules to a cached preview: the floor, emergency and flags can only go up."""
+    return card.model_copy(
+        update={
+            "urgency": max(card.urgency, rule.floor),
+            "urgency_rule_floor": rule.floor,
+            "emergency": rule.emergency,
+            "flags": sorted(set(card.flags) | rule.flags),
+        }
+    )
+
+
 @router.post("/preview")
-async def preview(body: RequestCreate, user: dict = Depends(require_role(Role.requester))) -> dict:
+async def preview(
+    body: RequestCreate,
+    user: dict = Depends(require_role(Role.requester)),
+    database: AsyncDatabase = Depends(get_database),
+) -> dict:
     """The triage card for the two-step submit (PLAN.md §9.2 step 4). Saves nothing."""
     rule = urgency_floor(body.text, user.get("requester_flags"))
-    # TODO(hazards): pass the active hazard types at body.location once services/hazards.py exists (PLAN.md §7).
-    card = apply_category_override(await triage(body.text, [], rule, language=user.get("language", "en")), body.category_override)
+    hazard_types = _hazard_types(await _hazards_at(database, body))
+    card = await triage(body.text, hazard_types, rule, language=user.get("language", "en"))
+    loc = body.location
+    preview_cache.put(user["_id"], body.text, loc and loc.lat, loc and loc.lon, card)
+    card = apply_category_override(card, body.category_override)
     return {"triage": card.model_dump(mode="json"), "emergency": card.emergency}
 
 
@@ -100,18 +129,61 @@ async def create(
     user: dict = Depends(require_role(Role.requester)),
     database: AsyncDatabase = Depends(get_database),
 ) -> dict:
+    """Save a request (PLAN.md §9.3): triage, tract + EJI, hazards, fuzzed location, priority, insert."""
     active = await database.requests.find_one({"requester_id": user["_id"], "status": {"$in": list(ACTIVE_STATUSES)}})
     if active:
         raise APIError(409, "ACTIVE_REQUEST_EXISTS", "You already have an active request")
-    emergency = is_emergency(body.text)
+    language = user.get("language", "en")
+    loc = body.location
+
+    # 1. Triage. The rules always run here; the AI card comes from the preview when there was one.
+    rule = urgency_floor(body.text, user.get("requester_flags"))
+    hazard_report = await _hazards_at(database, body)
+    cached = preview_cache.take(user["_id"], body.text, loc and loc.lat, loc and loc.lon)
+    if cached is not None:
+        card = _reconcile(cached, rule)
+    elif rule.emergency:
+        # Don't make someone in an emergency wait on the AI: urgency is already 5 from the rules.
+        card = merge(rule, None, body.text, language)
+    else:
+        card = await triage(body.text, _hazard_types(hazard_report), rule, language=language)
+    card = apply_category_override(card, body.category_override)
+
+    # 2-3. Tract + EJI (from the exact point) and the hazard snapshot.
+    tract = await tract_for_point(database, loc.lat, loc.lon) if loc else None
+    hazard_level = hazard_report["level"] if hazard_report else 0
+
     now = datetime.now(UTC)
+    # 5. Priority. Wait time is 0 at create; the feed recomputes it at read time (PLAN.md §9.4).
+    score, breakdown = priority.compute(
+        urgency=card.urgency,
+        hazard_level=hazard_level,
+        eji_rank=tract.get("eji_rank") if tract else None,
+        created_at=now,
+        now=now,
+        is_open=True,
+        weights=await priority.load_weights(database),
+    )
     request_id = ObjectId()
     doc = {
         "_id": request_id,
         "requester_id": user["_id"],
         "text": body.text,
-        "language": user.get("language", "en"),
-        "emergency": emergency,
+        "language": language,
+        "emergency": card.emergency,
+        "category": card.category,
+        "urgency": card.urgency,
+        "urgency_rule_floor": card.urgency_rule_floor,
+        "flags": list(card.flags),
+        "needs": card.needs,
+        "summary": card.summary,
+        "triage_source": card.source,
+        "tract_geoid": tract["geoid"] if tract else None,
+        "eji_rank": tract.get("eji_rank") if tract else None,
+        "hazard_snapshot": hazard_report,
+        "hazard_level": hazard_level,
+        "priority": score,
+        "priority_breakdown": breakdown,
         "status": RequestStatus.OPEN,
         "helper_id": None,
         "embed_text": None,  # filled in after the response by refresh_request_embedding
@@ -120,13 +192,14 @@ async def create(
         "created_at": now,
         "updated_at": now,
     }
-    if body.location:
-        fuzzed_lat, fuzzed_lon = fuzz_point(body.location.lat, body.location.lon, str(request_id), get_settings().jwt_secret)
-        doc["location"] = to_geojson(body.location.lat, body.location.lon)
+    if loc:
+        # 4. Fuzzed location for everyone but the two people on the request.
+        fuzzed_lat, fuzzed_lon = fuzz_point(loc.lat, loc.lon, str(request_id), get_settings().jwt_secret)
+        doc["location"] = to_geojson(loc.lat, loc.lon)
         doc["display_location"] = to_geojson(fuzzed_lat, fuzzed_lon)
     await database.requests.insert_one(doc)
     background.add_task(refresh_request_embedding, database, doc["_id"], body.text)
-    return {"request": await _serialize_one(database, doc, user), "show_911": emergency}
+    return {"request": await _serialize_one(database, doc, user), "show_911": card.emergency}
 
 
 @router.get("/mine")
