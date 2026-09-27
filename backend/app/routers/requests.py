@@ -9,7 +9,7 @@ from app.config import get_settings
 from app.deps import get_database, parse_object_id, require_onboarded, require_role
 from app.errors import APIError
 from app.models import ACTIVE_STATUSES, RequestCreate, RequestStatus, Role, TextIn, Triage, held_roles
-from app.services import matching, preview_cache, presence, priority, ranking
+from app.services import matching, preview_cache, presence, priority, ranking, sim
 from app.services.fuzz import fuzz_point
 from app.services.geo import to_geojson
 from app.services.hazards import get_hazards
@@ -229,6 +229,7 @@ async def ranked(user: dict = Depends(require_role(Role.helper)), database: Asyn
         "active_claims": active,
         "claim_limit": matching.MAX_ACTIVE_CLAIMS,
         "weights_note": priority.WEIGHTS_NOTE,
+        "simulated": (await sim.state(database))["active"],  # a demo scenario is shaping hazard levels
     }
     if active >= matching.MAX_ACTIVE_CLAIMS:
         return base | {"requests": [], "claim_limit_reached": True}

@@ -73,12 +73,13 @@ def _factor(key: str, value: float | None, flag: str | None = None) -> dict:
     }
 
 
-def _need_detail(breakdown: dict, eji_rank: float | None) -> list[dict]:
+def _need_detail(breakdown: dict, eji_rank: float | None, hazard_simulated: bool = False) -> list[dict]:
     """The parts of `need` a volunteer may see. EJI shows as a band only: no raw rank, value or contribution."""
     parts = []
     for k in ("urgency", "hazard", "wait"):
         f = breakdown[k]
         parts.append({"key": k, "raw": f["raw"], "weight": f["weight"], "contribution": round(f["contribution"], 2), "source": f["source"]})
+    parts[1]["simulated"] = hazard_simulated  # the hazard level came from a demo scenario (always labeled)
     parts.append({"key": "eji", "band": eji_band(eji_rank), "weight": breakdown["eji"]["weight"], "source": breakdown["eji"]["source"]})
     return parts
 
@@ -105,7 +106,8 @@ def score_request(
         _factor("proximity", proximity, "no_home_location" if not helper_home else "no_request_location"),
         _factor("need", need),
     ]
-    factors[2]["detail"] = _need_detail(need_breakdown, req.get("eji_rank"))
+    simulated = bool((req.get("hazard_snapshot") or {}).get("simulated"))
+    factors[2]["detail"] = _need_detail(need_breakdown, req.get("eji_rank"), simulated)
     return {
         "match_score": round(sum(f["contribution"] for f in factors), 4),
         "priority": need,

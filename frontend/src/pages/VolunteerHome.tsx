@@ -7,6 +7,7 @@ import PriorityBreakdown from '../components/PriorityBreakdown'
 import { RequestsMap } from '../components/map/lazy'
 import { Button, ErrorText, Loading } from '../components/ui'
 import { stagger } from '../lib/motion'
+import { PIN_COLORS, needTier, needValue } from '../lib/needTier'
 import { useMediaQuery } from '../lib/useMediaQuery'
 import { timeAgo } from '../lib/labels'
 import type { RankedRequest } from '../lib/types'
@@ -28,7 +29,9 @@ function RankedItem({
   request,
   rank,
   selected,
+  hovered,
   onSelect,
+  onHover,
   onClaim,
   busy,
   weightsNote,
@@ -36,12 +39,15 @@ function RankedItem({
   request: RankedRequest
   rank: number
   selected: boolean
+  hovered: boolean
   onSelect: () => void
+  onHover: (on: boolean) => void
   onClaim: () => void
   busy: boolean
   weightsNote: string
 }) {
   const ref = useRef<HTMLLIElement>(null)
+  const tier = needTier(needValue(request.breakdown))
   const [whyOpen, setWhyOpen] = useState(false)
   const whyId = `why-${request.id}`
   useEffect(() => {
@@ -51,16 +57,36 @@ function RankedItem({
     <li
       ref={ref}
       onClick={onSelect}
-      className={`animate-rise stagger flex cursor-pointer gap-4 rounded-xl bg-surface p-4 ${selected ? 'ring-2 ring-emerald-600' : ''}`}
+      // Hovering or focusing a card highlights its pin on the map, and hovering the pin highlights the card.
+      onMouseEnter={() => onHover(true)}
+      onMouseLeave={() => onHover(false)}
+      onFocus={() => onHover(true)}
+      onBlur={() => onHover(false)}
+      className={`animate-rise stagger flex cursor-pointer gap-4 rounded-xl bg-surface p-4 transition-shadow ${
+        selected ? 'ring-2 ring-emerald-600' : hovered ? 'ring-2 ring-emerald-300' : ''
+      }`}
       style={stagger(rank - 1)}
     >
       <MatchBar score={request.match_score} />
       <div className="min-w-0 flex-1">
-        <p className="text-sm text-ink-soft">
+        <p className="flex items-center gap-2 text-sm text-ink-soft">
+          <span
+            className="inline-flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-extrabold"
+            style={{
+              background: request.emergency ? PIN_COLORS.emergency.fill : PIN_COLORS.default.fill,
+              color: request.emergency ? PIN_COLORS.emergency.text : PIN_COLORS.default.text,
+            }}
+            title={tier.label}
+          >
+            {rank}
+          </span>
+          <span className="sr-only">{tier.label}. </span>
+          <span>
           {rank === 1 ? 'Top match, ' : ''}
           {request.distance_km !== null ? `about ${request.distance_km < 1 ? 'under 1' : Math.round(request.distance_km)} km away, ` : ''}
           posted {timeAgo(request.created_at)}
           {request.language !== 'en' && ` (${request.language})`}
+        </span>
         </p>
         {!request.display_location && <p className="mt-1 text-sm text-ink-soft">No location shared, so it isn't on the map.</p>}
         <p className="mt-1 text-lg">{request.text}</p>
@@ -109,6 +135,7 @@ export default function VolunteerHome() {
   const me = useMe()
   const home = me.data?.user.home_location ?? null
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [hoveredId, setHoveredId] = useState<string | null>(null)
   const [sheetOpen, setSheetOpen] = useState(true)
   const wide = useMediaQuery('(min-width: 1024px)')
   // Space the floating list covers, so the map fits and centers on what's left visible.
@@ -136,8 +163,14 @@ export default function VolunteerHome() {
         <RequestsMap
           requests={ranked.data?.requests ?? []}
           home={home}
+          radiusKm={ranked.data?.home_set ? ranked.data.radius_km : null}
           selectedId={selectedId}
+          hoveredId={hoveredId}
           onSelect={setSelectedId}
+          onHover={setHoveredId}
+          onClaim={claim}
+          claimBusy={claimingId !== null}
+          weightsNote={ranked.data?.weights_note ?? ''}
           className="h-full"
           note={false}
           background
@@ -236,7 +269,9 @@ export default function VolunteerHome() {
               request={r}
               rank={i + 1}
               selected={r.id === selectedId}
+              hovered={r.id === hoveredId}
               onSelect={() => setSelectedId(r.id)}
+              onHover={(on) => setHoveredId(on ? r.id : null)}
               onClaim={() => claim(r.id)}
               busy={claimingId !== null}
               weightsNote={ranked.data.weights_note}

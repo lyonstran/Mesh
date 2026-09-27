@@ -9,7 +9,10 @@ function needPartText(part: NeedPart): { label: string; value: string } {
     case 'urgency':
       return { label: 'Urgency', value: `${part.raw} of 5, ${URGENCY_LABELS[part.raw]?.toLowerCase() ?? ''}` }
     case 'hazard':
-      return { label: 'Weather hazard here', value: `${HAZARD_LEVEL_LABELS[part.raw] ?? `Level ${part.raw}`} (level ${part.raw} of 3)` }
+      return {
+        label: 'Weather hazard here',
+        value: `${HAZARD_LEVEL_LABELS[part.raw] ?? `Level ${part.raw}`} (level ${part.raw} of 3)${part.simulated ? ', SIMULATED scenario' : ''}`,
+      }
     case 'wait':
       return { label: 'Waiting', value: part.raw >= 60 ? 'over an hour' : `${Math.round(part.raw)} min` }
     case 'eji':

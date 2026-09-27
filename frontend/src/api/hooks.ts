@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type {
   AddRoleBody,
   DemoUser,
@@ -15,8 +15,10 @@ import type {
   ProfileUpdate,
   RankedResponse,
   RequestCreateBody,
+  SimState,
   Role,
   Triage,
+  TractsResponse,
 } from '../lib/types'
 import { api, post, postForBlob } from './client'
 
@@ -267,5 +269,44 @@ export function useHazardRegion(enabled: boolean) {
     enabled,
     staleTime: POLL_HAZARDS_MS,
     refetchInterval: POLL_HAZARDS_MS,
+  })
+}
+
+export type Bbox = [number, number, number, number] // minLon, minLat, maxLon, maxLat
+
+/** EJI band shading for the visible map area. The box is snapped outward to 0.05° so small pans reuse the cache. */
+export function useTracts(bbox: Bbox | null, zoom: number, enabled: boolean) {
+  const snap = (v: number, up: boolean) => (up ? Math.ceil(v * 20) : Math.floor(v * 20)) / 20
+  const box = bbox ? [snap(bbox[0], false), snap(bbox[1], false), snap(bbox[2], true), snap(bbox[3], true)] : null
+  return useQuery({
+    queryKey: ['tracts', box?.join(','), zoom],
+    queryFn: () => api<TractsResponse>(`/api/tracts?bbox=${box!.join(',')}&zoom=${zoom}`),
+    enabled: enabled && box !== null,
+    staleTime: 60 * 60_000, // EJI doesn't change during a session
+    placeholderData: keepPreviousData, // keep the old shading on screen while a pan loads
+  })
+}
+
+/** Demo scenario state. The endpoint is a 404 outside demo mode, so an error just means "no switch". */
+export function useSim() {
+  return useQuery({
+    queryKey: ['sim'],
+    queryFn: () => api<SimState>('/api/sim'),
+    retry: false,
+    staleTime: 30_000,
+    refetchInterval: 30_000, // pick up a scenario someone else switched on
+  })
+}
+
+/** Turn a demo scenario on or off. Hazards, rankings and requests all change, so refetch them. */
+export function useSetSim() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (scenarioId: string | null) =>
+      scenarioId ? post<SimState>('/api/sim/activate', { scenario_id: scenarioId }) : post<SimState>('/api/sim/deactivate'),
+    onSuccess: (state) => {
+      qc.setQueryData(['sim'], state)
+      for (const key of [['hazards'], ['requests'], ['sim']]) qc.invalidateQueries({ queryKey: key })
+    },
   })
 }

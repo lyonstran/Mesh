@@ -17,6 +17,7 @@ from pymongo.asynchronous.database import AsyncDatabase
 
 from app.config import get_settings
 from app.models import Hazard, HazardReport, HazardType
+from app.services import sim
 
 log = logging.getLogger("mesh.hazards")
 
@@ -285,5 +286,5 @@ async def get_hazards(db: AsyncDatabase, lat: float, lon: float, client: httpx.A
             await db.hazard_cache.replace_one(
                 {"_id": key}, {"report": report, "fetched_at": datetime.now(UTC)}, upsert=True
             )
-    # TODO(P2): simulation merge contract, `report = await sim.merge(report, db)`, sets simulated: true (PLAN.md §7).
-    return report
+    # Simulation merge (PLAN.md §7): adds the active demo scenario's hazards here and sets simulated: true.
+    return await sim.merge(report, db, lat, lon)

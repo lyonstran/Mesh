@@ -1,15 +1,18 @@
-import { useEffect, useRef, useState } from 'react'
-import { Circle, Marker, Tooltip, useMap } from 'react-leaflet'
+import { useEffect, useMemo, useState } from 'react'
+import { Circle, Marker, Tooltip, useMap, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
 import { useHazardRegion } from '../../api/hooks'
-import type { HazardRegion, HelpRequest, LatLon } from '../../lib/types'
-import { ALERT_COLORS, alertKey } from '../../lib/hazardColors'
+import { needValue } from '../../lib/needTier'
+import type { LatLon, RankedRequest } from '../../lib/types'
 import AlertAreas, { type AlertSelection } from './AlertAreas'
 import { HOME_ICON } from './icons'
+import { HEAT_MAX_ZOOM, TRACT_MIN_ZOOM, useLayers } from '../../lib/mapLayers'
+import MapLayersPanel from './MapLayersPanel'
 import MapView from './MapView'
+import NeedHeat from './NeedHeat'
+import RequestMarker from './RequestMarker'
+import TractShading from './TractShading'
 
-/** The fuzzed point is 300-500 m from the real one, so the circle shows an area, never an address. */
-const AREA_RADIUS_M = 500
 const EDGE_PX = 32
 
 /** Pixels of the map covered by an overlay. Fitting and centering leave that part clear. */
@@ -46,130 +49,93 @@ function FlyToSelected({ target, insets }: { target: LatLon | null; insets: Inse
   return null
 }
 
-/**
- * Legend, show/hide switch and a list of the alerts. Picking one flies the map to its area.
- * Sits top-right, clear of the list panel and the zoom control.
- */
-function AlertsControl({
-  region,
-  shown,
-  onToggle,
-  selectedKey,
-  onPick,
-}: {
-  region: HazardRegion
-  shown: boolean
-  onToggle: () => void
-  selectedKey: string | null
-  onPick: (key: string, coveredPx: { top: number; right: number }) => void
-}) {
-  const box = useRef<HTMLDivElement>(null)
-  // How much of the map this control covers, so the fitted area lands beside or below it.
-  const covered = () => {
-    const el = box.current
-    const parent = el?.offsetParent as HTMLElement | null
-    if (!el || !parent) return { top: 0, right: 0 }
-    // Beside the control when there's room next to it (wide screens); otherwise below it (phones).
-    return parent.clientWidth - el.offsetWidth > 2 * el.offsetWidth ? { top: 0, right: el.offsetWidth + 12 } : { top: el.offsetHeight + 12, right: 0 }
-  }
-  const drawn = region.features.map((f, i) => ({ alert: f, key: alertKey(f, i) })).filter((x) => x.alert.geometry)
-  const levels = [...new Set(drawn.map((x) => x.alert.properties.level))].sort()
-  const label =
-    region.sources_failed.length > 0
-      ? "Couldn't reach NWS alerts"
-      : drawn.length === 0
-        ? 'No NWS alerts in Georgia'
-        : `${drawn.length} NWS ${drawn.length === 1 ? 'alert' : 'alerts'} (official)`
-  return (
-    <div ref={box} className="absolute top-3 right-3 z-[500] w-80 max-w-[calc(100%-1.5rem)] overflow-hidden rounded-lg bg-surface/95 text-sm shadow-md ring-1 ring-ink/10">
-      <div className="flex items-center gap-2 px-3 py-2">
-        {levels.map((l) => (
-          <span key={l} aria-hidden className="size-3 shrink-0 rounded-sm border" style={{ background: ALERT_COLORS[l].fill, borderColor: ALERT_COLORS[l].stroke }} />
-        ))}
-        <span className="flex-1 font-semibold">{label}</span>
-        {drawn.length > 0 && (
-          <button type="button" onClick={onToggle} aria-pressed={shown} className="cursor-pointer font-semibold text-brand-strong underline underline-offset-4">
-            {shown ? 'Hide' : 'Show'}
-          </button>
-        )}
-      </div>
-      {shown && drawn.length > 0 && (
-        <ul aria-label="NWS alerts" className="max-h-56 overflow-y-auto border-t border-line">
-          {drawn.map(({ alert, key }) => {
-            const p = alert.properties
-            const selected = key === selectedKey
-            return (
-              <li key={key}>
-                <button
-                  type="button"
-                  onClick={() => onPick(key, covered())}
-                  aria-pressed={selected}
-                  className={`flex w-full cursor-pointer items-start gap-2 px-3 py-2 text-left hover:bg-brand-soft ${selected ? 'bg-brand-soft' : ''}`}
-                >
-                  <span aria-hidden className="mt-1 size-3 shrink-0 rounded-sm border" style={{ background: ALERT_COLORS[p.level].fill, borderColor: ALERT_COLORS[p.level].stroke }} />
-                  <span className="min-w-0">
-                    <span className="block font-semibold">{p.event}</span>
-                    {p.area_desc && <span className="block truncate text-ink-soft">{p.area_desc}</span>}
-                  </span>
-                </button>
-              </li>
-            )
-          })}
-        </ul>
-      )}
-    </div>
-  )
+function ZoomWatch({ onZoom }: { onZoom: (z: number) => void }) {
+  const map = useMapEvents({ zoomend: () => onZoom(map.getZoom()) })
+  useEffect(() => onZoom(map.getZoom()), [map, onZoom])
+  return null
 }
 
 /**
- * Open requests as approximate areas, plus the volunteer's home point. The list is the accessible alternative.
- * On the volunteer page the map is the full-page background under a floating list, so it takes `insets`
- * for the space the list covers, and shows its own zoom control clear of it.
+ * The volunteer map: ranked requests as numbered pins colored by need, the volunteer's home and travel radius,
+ * and optional layers (NWS alert areas, EJI tract shading, need heatmap). The list is the accessible alternative.
+ * The map is the full-page background under a floating list, so it takes `insets` for the space the list covers.
  */
 export default function RequestsMap({
   requests,
   home,
+  radiusKm,
   selectedId,
+  hoveredId,
   onSelect,
+  onHover,
+  onClaim,
+  claimBusy,
+  weightsNote,
   className = 'h-72 rounded-xl border border-line',
   note = true,
   background = false,
   insets = { left: 0, bottom: 0 },
   showAlerts = false,
 }: {
-  requests: HelpRequest[]
+  requests: RankedRequest[] // in rank order; pins are numbered to match the list
   home: LatLon | null
+  radiusKm: number | null
   selectedId: string | null
+  hoveredId: string | null
   onSelect: (id: string) => void
+  onHover: (id: string | null) => void
+  onClaim: (id: string) => void
+  claimBusy: boolean
+  weightsNote: string
   className?: string
   note?: boolean
   background?: boolean
   insets?: Insets
   showAlerts?: boolean // statewide NWS alert areas (volunteer map only)
 }) {
-  const region = useHazardRegion(showAlerts)
-  const [alertsShown, setAlertsShown] = useState(true)
+  const [layers, toggleLayer] = useLayers()
+  const region = useHazardRegion(showAlerts && layers.alerts)
+  const [zoom, setZoom] = useState(12)
   const [alertPick, setAlertPick] = useState<AlertSelection | null>(null)
-  const [legendCover, setLegendCover] = useState({ top: 0, right: 0 })
-  // Keep a fitted alert clear of the list panel (left or bottom) and of the alerts legend (top-right).
+  const [panelCover, setPanelCover] = useState({ top: 0, right: 0 })
+  // Keep a fitted alert clear of the list panel (left or bottom) and of the layers panel (top-right).
   const alertPadding = {
-    topLeft: [insets.left + EDGE_PX, legendCover.top + EDGE_PX] as [number, number],
-    bottomRight: [legendCover.right + EDGE_PX, insets.bottom + EDGE_PX] as [number, number],
+    topLeft: [insets.left + EDGE_PX, panelCover.top + EDGE_PX] as [number, number],
+    bottomRight: [panelCover.right + EDGE_PX, insets.bottom + EDGE_PX] as [number, number],
   }
-  const shown = requests.filter((r) => r.display_location)
-  const points = [...shown.map((r) => r.display_location as LatLon), ...(home ? [home] : [])]
-  const selected = shown.find((r) => r.id === selectedId)?.display_location ?? null
+
+  // An opened request popup stays clear of the list panel (left or bottom) and the layers panel (top-right).
+  const wide = insets.left > 0
+  const popupPadding = {
+    topLeft: [insets.left + 16, wide ? 16 : 72] as [number, number],
+    bottomRight: [wide ? 352 : 16, insets.bottom + 16] as [number, number],
+  }
+
+  const ranked = requests.map((r, i) => ({ request: r, rank: i + 1 })).filter((x) => x.request.display_location)
+  const points = [...ranked.map((x) => x.request.display_location as LatLon), ...(home ? [home] : [])]
+  const selected = ranked.find((x) => x.request.id === selectedId)?.request.display_location ?? null
+  const heatPoints = useMemo(
+    () =>
+      ranked.map(({ request }) => {
+        const p = request.display_location as LatLon
+        return [p.lat, p.lon, needValue(request.breakdown)] as [number, number, number]
+      }),
+    // Rebuild only when the set of requests or their need changes, not on every poll.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [ranked.map((x) => `${x.request.id}:${needValue(x.request.breakdown).toFixed(2)}`).join(',')],
+  )
 
   return (
     <div className={`relative ${note ? 'space-y-2' : 'h-full'}`}>
-      {region.data && (
-        <AlertsControl
+      {showAlerts && (
+        <MapLayersPanel
+          layers={layers}
+          onToggle={toggleLayer}
           region={region.data}
-          shown={alertsShown}
-          onToggle={() => setAlertsShown((s) => !s)}
-          selectedKey={alertPick?.key ?? null}
-          onPick={(key, cover) => {
-            setLegendCover(cover)
+          zoom={zoom}
+          selectedAlert={alertPick?.key ?? null}
+          onPickAlert={(key, cover) => {
+            setPanelCover(cover)
             setAlertPick((prev) => ({ key, n: (prev?.n ?? 0) + 1 }))
           }}
         />
@@ -182,33 +148,45 @@ export default function RequestsMap({
         wheelZoom={background}
         zoomPosition={background ? 'bottomright' : 'topleft'}
       >
-        <FitTo points={points} fitKey={shown.map((r) => r.id).join(',') + (home ? 'h' : '')} insets={insets} />
+        <ZoomWatch onZoom={setZoom} />
+        <FitTo points={points} fitKey={ranked.map((x) => x.request.id).join(',') + (home ? 'h' : '')} insets={insets} />
         <FlyToSelected target={selected} insets={insets} />
-        {region.data && alertsShown && <AlertAreas region={region.data} selection={alertPick} padding={alertPadding} />}
+        {layers.vulnerability && zoom >= TRACT_MIN_ZOOM && <TractShading />}
+        {showAlerts && layers.alerts && region.data && <AlertAreas region={region.data} selection={alertPick} padding={alertPadding} />}
+        {layers.heat && zoom <= HEAT_MAX_ZOOM && heatPoints.length > 0 && <NeedHeat points={heatPoints} />}
+        {home && radiusKm && (
+          <Circle
+            center={[home.lat, home.lon]}
+            radius={radiusKm * 1000}
+            interactive={false}
+            pathOptions={{ color: '#1e2a47', weight: 1.5, dashArray: '6 6', fill: false, opacity: 0.55 }}
+          />
+        )}
         {home && (
           <Marker position={[home.lat, home.lon]} icon={HOME_ICON}>
-            <Tooltip>Your home location</Tooltip>
+            <Tooltip>{radiusKm ? `Your home. Dashed ring: the ${radiusKm} km you'll travel.` : 'Your home location'}</Tooltip>
           </Marker>
         )}
-        {shown.map((r) => {
-          const c = r.display_location as LatLon
-          const isSelected = r.id === selectedId
-          return (
-            <Circle
-              key={r.id}
-              center={[c.lat, c.lon]}
-              radius={AREA_RADIUS_M}
-              pathOptions={{ color: '#047857', fillColor: '#10b981', fillOpacity: isSelected ? 0.55 : 0.28, weight: isSelected ? 3 : 1.5 }}
-              eventHandlers={{ click: () => onSelect(r.id) }}
-            >
-              <Tooltip>{r.text.length > 70 ? `${r.text.slice(0, 70)}…` : r.text}</Tooltip>
-            </Circle>
-          )
-        })}
+        {ranked.map(({ request, rank }) => (
+          <RequestMarker
+            key={request.id}
+            request={request}
+            rank={rank}
+            selected={request.id === selectedId}
+            hovered={request.id === hoveredId}
+            zoom={zoom}
+            weightsNote={weightsNote}
+            panPadding={popupPadding}
+            onSelect={() => onSelect(request.id)}
+            onHover={(on) => onHover(on ? request.id : null)}
+            onClaim={() => onClaim(request.id)}
+            claimBusy={claimBusy}
+          />
+        ))}
       </MapView>
       {note && (
         <p className="text-sm text-ink-soft">
-          Circles show an approximate area (about 500 m). Exact addresses are shared only with the volunteer who takes the request.
+          Pins mark an approximate area (about 500 m). Exact addresses are shared only with the volunteer who takes the request.
         </p>
       )}
     </div>

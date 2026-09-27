@@ -3,7 +3,7 @@ from fastapi import APIRouter
 from app import db
 from app.ai.provider import get_provider
 from app.config import get_settings
-from app.services import ranking
+from app.services import ranking, sim
 
 router = APIRouter()
 
@@ -16,8 +16,7 @@ async def health() -> dict:
     if db_ok:
         try:
             database = db.get_db()
-            sim = await database.settings.find_one({"_id": "sim"})
-            sim_active = bool(sim and sim.get("active"))
+            sim_active = (await sim.state(database))["active"]  # only ever true in demo mode
             await ranking.ensure_initialized(database)
         except Exception:
             db_ok = False
