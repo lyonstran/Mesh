@@ -4,8 +4,8 @@ import { useMe } from '../api/hooks'
 import { homeFor } from '../auth/home'
 
 const NAV_LINKS = [
+  { href: '/#features', label: 'Features' },
   { href: '/#how-it-works', label: 'How it works' },
-  { href: '/#volunteering', label: 'Volunteering' },
   { href: '/#safety', label: 'Safety' },
 ]
 
@@ -18,7 +18,7 @@ export default function PublicLayout() {
   return (
     <div className="flex min-h-screen flex-col">
       <header className="sticky top-0 z-20 border-b border-line bg-ground/95 backdrop-blur">
-        <nav aria-label="Main" className="mx-auto flex h-16 max-w-5xl items-center gap-2 px-4">
+        <nav aria-label="Main" className="mx-auto flex h-16 max-w-6xl items-center gap-2 px-4">
           <Link
             to="/"
             className="mr-auto flex items-center gap-2 text-2xl font-extrabold tracking-tight"
@@ -58,7 +58,7 @@ export default function PublicLayout() {
         </nav>
 
         {menuOpen && (
-          <ul id="mobile-nav" className="mx-auto max-w-5xl border-t border-line px-4 pb-3 sm:hidden">
+          <ul id="mobile-nav" className="mx-auto max-w-6xl border-t border-line px-4 pb-3 sm:hidden">
             {NAV_LINKS.map((l) => (
               <li key={l.href}>
                 <a href={l.href} className="block py-3 font-semibold" onClick={() => setMenuOpen(false)}>
@@ -75,7 +75,7 @@ export default function PublicLayout() {
       </div>
 
       <footer className="border-t border-line">
-        <div className="mx-auto flex max-w-5xl flex-col gap-2 px-4 py-8 text-sm text-ink-soft sm:flex-row sm:justify-between">
+        <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-8 text-sm text-ink-soft sm:flex-row sm:justify-between">
           <p>Mesh is not an emergency service. If anyone's life is in danger, call 911.</p>
           <p>
             Built at HackGT 13.{' '}

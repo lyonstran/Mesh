@@ -99,9 +99,13 @@ def place(bearing: float, km: float) -> dict:
 
 
 async def reset(database) -> None:
-    demo_requests = await database.requests.find({"demo": True}, {"_id": 1}).to_list()
-    await database.messages.delete_many({"request_id": {"$in": [r["_id"] for r in demo_requests]}})
-    await database.requests.delete_many({"demo": True})
+    # Also requests demo accounts made in the UI (they aren't flagged demo), so none are left pointing at deleted users.
+    demo_user_ids = [u["_id"] for u in await database.users.find({"demo": True}, {"_id": 1}).to_list()]
+    requests_filter = {"$or": [{"demo": True}, {"requester_id": {"$in": demo_user_ids}}]}
+    demo_requests = [r["_id"] for r in await database.requests.find(requests_filter, {"_id": 1}).to_list()]
+    await database.messages.delete_many({"request_id": {"$in": demo_requests}})
+    await database.presence.delete_many({"request_id": {"$in": demo_requests}})
+    await database.requests.delete_many({"_id": {"$in": demo_requests}})
     await database.users.delete_many({"demo": True})
 
 

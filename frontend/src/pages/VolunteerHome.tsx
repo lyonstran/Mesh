@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { ApiError } from '../api/client'
 import { useMe, useMyRequests, useRanked, useRequestAction } from '../api/hooks'
 import HazardBanner from '../components/HazardBanner'
+import { RequestTags, RequestText } from '../components/RequestTags'
 import PriorityBreakdown from '../components/PriorityBreakdown'
 import { RequestsMap } from '../components/map/lazy'
 import { Button, ErrorText, Loading } from '../components/ui'
@@ -62,8 +63,8 @@ function RankedItem({
       onMouseLeave={() => onHover(false)}
       onFocus={() => onHover(true)}
       onBlur={() => onHover(false)}
-      className={`animate-rise stagger flex cursor-pointer gap-4 rounded-xl bg-surface p-4 transition-shadow ${
-        selected ? 'ring-2 ring-emerald-600' : hovered ? 'ring-2 ring-emerald-300' : ''
+      className={`animate-rise stagger flex cursor-pointer gap-4 rounded-2xl border bg-surface p-4 transition-shadow duration-200 hover:shadow-[0_12px_28px_-20px_rgba(30,42,71,0.45)] ${
+        selected ? 'border-transparent ring-2 ring-emerald-600' : hovered ? 'border-transparent ring-2 ring-emerald-300' : 'border-line'
       }`}
       style={stagger(rank - 1)}
     >
@@ -82,14 +83,19 @@ function RankedItem({
           </span>
           <span className="sr-only">{tier.label}. </span>
           <span>
-          {rank === 1 ? 'Top match, ' : ''}
-          {request.distance_km !== null ? `about ${request.distance_km < 1 ? 'under 1' : Math.round(request.distance_km)} km away, ` : ''}
-          posted {timeAgo(request.created_at)}
-          {request.language !== 'en' && ` (${request.language})`}
-        </span>
+            {rank === 1 && <span className="font-bold text-brand-strong">Top match · </span>}
+            {request.distance_km !== null && `${request.distance_km < 1 ? 'Under 1 km' : `${Math.round(request.distance_km)} km`} away · `}
+            {timeAgo(request.created_at)}
+            {request.language !== 'en' && ` · ${request.language.toUpperCase()}`}
+          </span>
         </p>
+        <div className="mt-2">
+          <RequestTags request={request} />
+        </div>
+        <div className="mt-2">
+          <RequestText request={request} />
+        </div>
         {!request.display_location && <p className="mt-1 text-sm text-ink-soft">No location shared, so it isn't on the map.</p>}
-        <p className="mt-1 text-lg">{request.text}</p>
         {request.emergency && (
           <p className="mt-2 text-sm font-semibold text-alert">May be an emergency. The requester was shown the option to call 911.</p>
         )}
@@ -180,7 +186,7 @@ export default function VolunteerHome() {
       </div>
       <aside
         aria-label="Requests"
-        className={`animate-rise absolute inset-x-0 bottom-0 z-10 flex flex-col rounded-t-2xl bg-ground/90 shadow-[0_-8px_30px_-8px_rgba(30,42,71,0.35)] ring-1 ring-ink/10 backdrop-blur-md lg:inset-x-auto lg:top-4 lg:bottom-4 lg:left-4 lg:w-[26rem] lg:rounded-2xl lg:shadow-[0_12px_40px_-12px_rgba(30,42,71,0.45)] ${
+        className={`animate-rise absolute inset-x-0 bottom-0 z-10 flex flex-col rounded-t-2xl bg-ground/90 shadow-[0_-8px_30px_-8px_rgba(30,42,71,0.35)] ring-1 ring-ink/10 backdrop-blur-md lg:inset-x-auto lg:top-6 lg:bottom-6 lg:left-6 lg:w-[26rem] lg:rounded-2xl lg:shadow-[0_12px_40px_-12px_rgba(30,42,71,0.45)] ${
           sheetOpen ? 'max-h-[55%]' : ''
         } lg:max-h-none`}
       >
