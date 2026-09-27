@@ -11,6 +11,7 @@ import {
 } from '../api/hooks'
 import EmergencyInterstitial from '../components/EmergencyInterstitial'
 import LiveTracking from '../components/LiveTracking'
+import StatusTimeline from '../components/StatusTimeline'
 import { LocationPicker, VolunteersMap } from '../components/map/lazy'
 import { Button, ErrorText, Field, Loading, inputClass } from '../components/ui'
 import { CATEGORY_LABELS, FLAG_LABELS, STATUS_LABELS, URGENCY_LABELS, timeAgo } from '../lib/labels'
@@ -203,6 +204,7 @@ function NearbyVolunteers({ center }: { center: LatLon | null }) {
 }
 
 function ActiveRequest({ request }: { request: HelpRequest }) {
+  const me = useMe()
   const action = useRequestAction()
   const claimed = request.status === 'CLAIMED'
 
@@ -221,6 +223,8 @@ function ActiveRequest({ request }: { request: HelpRequest }) {
         </p>
         <p className="mt-2 text-lg">{request.text}</p>
       </div>
+
+      <StatusTimeline request={request} viewerId={me.data?.user.id} />
 
       {claimed && <div className="mt-6"><LiveTracking request={request} otherName={request.helper?.name ?? 'your volunteer'} /></div>}
       {request.status === 'OPEN' && <NearbyVolunteers center={request.location ?? request.display_location ?? null} />}

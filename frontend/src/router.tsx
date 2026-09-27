@@ -1,6 +1,7 @@
 import { Navigate, createBrowserRouter } from 'react-router-dom'
 import { AuthGuard, RoleGuard } from './auth/guards'
 import Layout from './components/Layout'
+import About from './pages/About'
 import PublicLayout from './components/PublicLayout'
 import Chat from './pages/Chat'
 import ErrorPage from './pages/ErrorPage'
@@ -19,6 +20,7 @@ export const router = createBrowserRouter([
     children: [
       { path: '/', element: <Landing /> },
       { path: '/login', element: <Login /> },
+      { path: '/about', element: <About /> },
     ],
   },
   {

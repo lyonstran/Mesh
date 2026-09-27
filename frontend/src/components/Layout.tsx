@@ -76,6 +76,17 @@ export default function Layout() {
       <main className={fullPage ? 'w-full' : 'mx-auto max-w-xl px-4 pt-6 pb-16'}>
         <Outlet />
       </main>
+      {/* The volunteer page is a full-screen map; its tiles carry the OpenStreetMap credit instead. */}
+      {!fullPage && (
+        <footer className="border-t border-line">
+          <div className="mx-auto flex max-w-xl flex-col gap-1 px-4 py-6 text-sm text-ink-soft">
+            <p>Mesh is not an emergency service. If anyone's life is in danger, call 911.</p>
+            <Link to="/about" className="font-semibold underline underline-offset-4 hover:text-ink">
+              Data sources and credits
+            </Link>
+          </div>
+        </footer>
+      )}
     </div>
   )
 }
