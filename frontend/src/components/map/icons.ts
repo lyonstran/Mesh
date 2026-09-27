@@ -11,4 +11,5 @@ export function dotIcon(fill: string, ring = '#ffffff', size = 22): L.DivIcon {
 }
 
 export const BRAND_ICON = dotIcon('#10b981')
-export const HOME_ICON = dotIcon('#1e2a47')
+// emerald-500, so "you are here" stands out from the navy request pins.
+export const HOME_ICON = dotIcon('#10b981')
