@@ -2,7 +2,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type {
   AddRoleBody,
   DemoUser,
+  GeocodeMatch,
   HelpRequest,
+  LatLon,
+  LiveLocation,
+  NearbyVolunteer,
   MeResponse,
   Message,
   OnboardingBody,
@@ -147,7 +151,8 @@ export function useCheckEmergency() {
 export function useCreateRequest() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (text: string) => post<{ request: HelpRequest; show_911: boolean }>('/api/requests', { text }),
+    mutationFn: (body: { text: string; location?: LatLon }) =>
+      post<{ request: HelpRequest; show_911: boolean }>('/api/requests', body),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.mine }),
   })
 }
@@ -171,4 +176,40 @@ export function listMessages(requestId: string, after?: string) {
 
 export function sendMessage(requestId: string, text: string) {
   return post<{ message: Message }>(`/api/requests/${requestId}/messages`, { text })
+}
+
+/** Street-address search (US Census geocoder via the backend). It does not match place names. */
+export function searchAddress(q: string) {
+  return api<{ matches: GeocodeMatch[] }>(`/api/geocode?q=${encodeURIComponent(q)}`)
+}
+
+/** Approximate areas of volunteers around a point, for the requester's map. */
+export function useNearbyVolunteers(center: LatLon | null) {
+  return useQuery({
+    queryKey: ['volunteers', 'nearby', center?.lat, center?.lon] as const,
+    queryFn: () => api<{ volunteers: NearbyVolunteer[]; radius_km: number }>(`/api/volunteers/nearby?lat=${center?.lat}&lon=${center?.lon}`),
+    enabled: center !== null,
+    staleTime: 60_000,
+  })
+}
+
+/** Live location sharing on a claimed request (polling; the backend only ever returns the other person's point). */
+export function postLocation(requestId: string, body: LatLon & { accuracy?: number }) {
+  return post<{ ok: boolean; throttled: boolean }>(`/api/requests/${requestId}/location`, body)
+}
+
+export function stopSharingLocation(requestId: string) {
+  return api<{ ok: boolean }>(`/api/requests/${requestId}/location`, { method: 'DELETE' })
+}
+
+const POLL_LOCATION_MS = 5_000
+
+export function useOtherLocation(requestId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ['requests', requestId, 'location'] as const,
+    queryFn: () => api<{ other: LiveLocation | null; simulated: boolean; stale_after_s: number }>(`/api/requests/${requestId}/location`),
+    enabled,
+    refetchInterval: POLL_LOCATION_MS,
+    retry: false,
+  })
 }

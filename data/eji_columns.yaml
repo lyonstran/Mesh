@@ -1,9 +1,9 @@
 # Maps Mesh field names to CDC/ATSDR EJI 2024 CSV column names (PLAN.md §4).
-# TODO(HUMAN): these are PLACEHOLDERS. Open the EJI data dictionary and correct every value.
-# Do not assume any of these are right.
-geoid: GEOID           # 11-digit tract FIPS as string
-eji_rank: RPL_EJI      # overall EJI percentile rank 0-1
-climate_rank: null     # EJI + Climate Burden rank column (fill in from dictionary)
-env_rank: null         # environmental burden module
-svm_rank: null         # social vulnerability module
-hvm_rank: null         # health vulnerability module
+# Verified against EJI_DATADICTIONARY_2024.csv (CDC/ATSDR EJI 2024, Georgia file: 2,791 tracts).
+# The dictionary file is cp1252-encoded. -999 means "no data" (12 tracts have it in RPL_EJI).
+geoid: GEOID           # 11-digit 2020 tract FIPS as string (equals GEOID_2020 for every Georgia row)
+eji_rank: RPL_EJI      # percentile rank of SPL_EJI, 0-1
+climate_rank: RPL_EJI_CBM  # percentile rank of EJI plus the Climate Burden Module, 0-1
+env_rank: RPL_EBM      # Environmental Burden Module percentile rank, 0-1
+svm_rank: RPL_SVM      # Social Vulnerability Module percentile rank, 0-1
+hvm_rank: RPL_HVM      # NOT a percentile: normalized 0-1 flag score (F_HVM * 0.2)

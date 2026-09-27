@@ -1,4 +1,4 @@
-import type { HelperProfile, RequesterFlags } from './types'
+import { DEFAULT_RADIUS_KM, type HelperProfile, type RequesterFlags } from './types'
 
 export interface Basics {
   name: string
@@ -6,7 +6,7 @@ export interface Basics {
   background: string
 }
 
-export const EMPTY_HELPER: HelperProfile = { skills: [], custom_skills: [], resources: [], about: '' }
+export const EMPTY_HELPER: HelperProfile = { skills: [], custom_skills: [], resources: [], about: '', radius_km: DEFAULT_RADIUS_KM, show_area_to_requesters: true }
 export const EMPTY_FLAGS: RequesterFlags = { medical_device: false, mobility: false, lives_alone: false }
 
 /** A volunteer needs at least one skill, item, or description so we have something to match on. */

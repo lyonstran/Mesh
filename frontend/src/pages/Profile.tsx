@@ -2,12 +2,13 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAddRole, useMe, useUpdateProfile } from '../api/hooks'
 import { homeFor } from '../auth/home'
+import { LocationPicker } from '../components/map/lazy'
 import { BasicsFields, HelperProfileFields, RequesterFlagsFields } from '../components/ProfileFields'
 import { ApiError } from '../api/client'
 import { Button, ErrorText, Loading } from '../components/ui'
 import { EMPTY_FLAGS, EMPTY_HELPER, helperHasContent, type Basics } from '../lib/profile'
 import { useToast } from '../lib/toast'
-import type { HelperProfile, ProfileUpdate, RequesterFlags, Role, User } from '../lib/types'
+import type { HelperProfile, LatLon, ProfileUpdate, RequesterFlags, Role, User } from '../lib/types'
 
 function saveError(err: unknown, what: string): string {
   return err instanceof ApiError
@@ -60,6 +61,7 @@ function ProfileForm({ user, tab, onTabChange }: { user: User; tab: Role; onTabC
 
   // State lives here so edits survive switching tabs; each tab saves its own profile plus the shared basics.
   const [basics, setBasics] = useState<Basics>({ name: user.name ?? '', language: user.language, background: user.background })
+  const [home, setHome] = useState<LatLon | null>(user.home_location)
   const [helper, setHelper] = useState<HelperProfile>({ ...EMPTY_HELPER, ...user.helper })
   const [flags, setFlags] = useState<RequesterFlags>({ ...EMPTY_FLAGS, ...user.requester_flags })
 
@@ -76,6 +78,23 @@ function ProfileForm({ user, tab, onTabChange }: { user: User; tab: Role; onTabC
         }),
       onError: (err) => toast({ kind: 'error', message: saveError(err, 'save your changes') }),
     })
+
+  // Saved immediately: the picker sits beside two different Save buttons, and setting a pin then pressing the
+  // wrong one used to drop it silently. On failure the pin goes back to what is stored.
+  const saveHome = (next: LatLon | null) => {
+    const previous = home
+    setHome(next)
+    update.mutate(
+      { home_location: next },
+      {
+        onSuccess: () => toast({ kind: 'success', message: next ? 'Home location saved.' : 'Home location removed.' }),
+        onError: (err) => {
+          setHome(previous)
+          toast({ kind: 'error', message: saveError(err, 'save your home location') })
+        },
+      },
+    )
+  }
 
   const submitGeneral = (e: React.FormEvent) => {
     e.preventDefault()
@@ -105,6 +124,13 @@ function ProfileForm({ user, tab, onTabChange }: { user: User; tab: Role; onTabC
         <h2 className="text-xl font-extrabold">General info</h2>
         <p className="-mt-3 text-sm text-ink-soft">Shared by your requester and volunteer profiles.</p>
         <BasicsFields value={basics} onChange={setBasics} />
+        <div>
+          <h3 className="font-semibold">Home location</h3>
+          <p className="mt-0.5 text-sm text-ink-soft">Used to find requests near you. Your exact location is never shown to anyone else. Saved as soon as you set it.</p>
+          <div className="mt-3">
+            <LocationPicker value={home} onChange={saveHome} clearable />
+          </div>
+        </div>
         <Button type="submit" variant="quiet" disabled={!canSaveGeneral || update.isPending}>
           {update.isPending ? 'Saving…' : 'Save general info'}
         </Button>

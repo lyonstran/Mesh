@@ -1,4 +1,4 @@
-import { Link, Outlet, useNavigate } from 'react-router-dom'
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useLogout, useMe, useSwitchMode } from '../api/hooks'
 import { homeFor } from '../auth/home'
 import type { Role } from '../lib/types'
@@ -15,6 +15,8 @@ export default function Layout() {
   const switchMode = useSwitchMode()
   const navigate = useNavigate()
   const user = me.data?.user
+  // The volunteer page is a list beside a map that fill the whole page; everything else stays a narrow column.
+  const fullPage = useLocation().pathname === '/h'
 
   return (
     <div className="min-h-screen">
@@ -71,7 +73,7 @@ export default function Layout() {
           )}
         </div>
       </header>
-      <main className="mx-auto max-w-xl px-4 pt-6 pb-16">
+      <main className={fullPage ? 'w-full' : 'mx-auto max-w-xl px-4 pt-6 pb-16'}>
         <Outlet />
       </main>
     </div>

@@ -7,10 +7,14 @@ import argparse
 import asyncio
 from datetime import UTC, datetime, timedelta
 
+from bson import ObjectId
+
 from app import db
 from app.config import get_settings
 from app.models import RequestStatus, Role
 from app.services.embeddings import embed_for_matching
+from app.services.fuzz import fuzz_point
+from app.services.geo import destination, to_geojson
 from app.services.profile import helper_embedding_fields
 from app.services.rules import is_emergency
 
@@ -65,6 +69,20 @@ REQUESTERS = [
 ]
 
 
+# Demo locations are offsets (bearing in degrees, distance in km) from the HackGT venue in PLAN.md §0, not real
+# addresses. Every seeded user and request is flagged demo: true.
+VENUE = (33.7756, -84.3963)
+PLACES = [(20, 0.4), (95, 1.2), (170, 0.9), (250, 1.6), (320, 1.1), (60, 2.3), (140, 2.6), (210, 2.0), (285, 2.8), (350, 3.0),
+          (40, 0.9), (115, 1.9), (190, 1.4), (265, 0.7), (330, 2.2), (75, 3.4), (155, 3.2), (230, 3.6), (300, 0.5), (10, 1.7)]
+
+
+def place(i: int) -> dict:
+    """GeoJSON Point for the i-th demo place."""
+    bearing, km = PLACES[i % len(PLACES)]
+    lat, lon = destination(VENUE[0], VENUE[1], bearing, km * 1000)
+    return to_geojson(lat, lon)
+
+
 async def reset(database) -> None:
     demo_requests = await database.requests.find({"demo": True}, {"_id": 1}).to_list()
     await database.messages.delete_many({"request_id": {"$in": [r["_id"] for r in demo_requests]}})
@@ -86,7 +104,8 @@ async def seed(database) -> None:
             "roles": [Role.helper],
             "language": spec.get("language", "en"),
             "background": spec["background"],
-            "helper": spec["helper"],
+            "home_location": place(n - 1),
+            "helper": {"radius_km": 10} | spec["helper"],
             "requester_flags": None,
             "verified": True,
             "demo": True,
@@ -106,6 +125,7 @@ async def seed(database) -> None:
             "roles": [Role.requester],
             "language": language,
             "background": "",
+            "home_location": place(n - 1),
             "helper": None,
             "requester_flags": {"medical_device": False, "mobility": False, "lives_alone": False} | flags,
             "demo": True,
@@ -117,7 +137,13 @@ async def seed(database) -> None:
             continue
         created = now - timedelta(minutes=5 * (len(REQUESTERS) - i))
         embed_text, vector = await embed_for_matching(text, "request")
+        request_id = ObjectId()
+        exact = user["home_location"]
+        fuzzed = fuzz_point(exact["coordinates"][1], exact["coordinates"][0], str(request_id), get_settings().jwt_secret)
         await database.requests.insert_one({
+            "_id": request_id,
+            "location": exact,
+            "display_location": to_geojson(*fuzzed),
             "requester_id": user["_id"],
             "text": text,
             "language": language,
@@ -143,8 +169,9 @@ async def seed(database) -> None:
         "roles": [Role.requester, Role.helper],
         "language": "en",
         "background": "Retired paramedic who lives on the second floor and uses a cane.",
-        "helper": {"skills": ["first_aid", "cpr"], "custom_skills": [], "resources": ["medical_kit"], "about": "Can check on neighbors and give basic first aid."},
+        "helper": {"skills": ["first_aid", "cpr"], "custom_skills": [], "resources": ["medical_kit"], "radius_km": 10, "about": "Can check on neighbors and give basic first aid."},
         "requester_flags": {"medical_device": False, "mobility": True, "lives_alone": True},
+        "home_location": place(n - 1),
         "verified": True,
         "demo": True,
         "created_at": now,

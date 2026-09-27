@@ -9,6 +9,7 @@ from app.errors import APIError
 from app.models import AddRoleIn, OnboardingIn, ProfileUpdate, Role, held_roles
 from app.services.indexing import refresh_helper_embedding
 from app.services.profile import helper_profile_text
+from app.services.geo import to_geojson
 from app.services.serialize import public_user
 
 router = APIRouter()
@@ -25,6 +26,9 @@ async def _save_profile(database: AsyncDatabase, user: dict, fields: dict, backg
 
     Returns (updated user, whether matches are being refreshed).
     """
+    if "home_location" in fields:  # the API takes {lat, lon}; Mongo stores GeoJSON
+        home = fields["home_location"]
+        fields["home_location"] = to_geojson(home["lat"], home["lon"]) if home else None
     merged = user | fields
     rematching = False
     if Role.helper in held_roles(merged):

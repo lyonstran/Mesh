@@ -2,11 +2,12 @@ import { useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { useMe, useOnboarding } from '../api/hooks'
 import { homeFor } from '../auth/home'
+import { LocationPicker } from '../components/map/lazy'
 import { BasicsFields, HelperProfileFields, RequesterFlagsFields } from '../components/ProfileFields'
 import { Button, ErrorText } from '../components/ui'
 import { EMPTY_FLAGS, EMPTY_HELPER, helperHasContent, type Basics } from '../lib/profile'
 import { stagger } from '../lib/motion'
-import type { HelperProfile, RequesterFlags, Role } from '../lib/types'
+import type { HelperProfile, LatLon, RequesterFlags, Role } from '../lib/types'
 
 const ROLE_CHOICES: { role: Role; title: string; body: string }[] = [
   { role: 'requester', title: 'I need help', body: 'Describe what you need and a volunteer who fits will reach out in a private chat.' },
@@ -20,6 +21,7 @@ export default function Onboarding() {
 
   const [role, setRole] = useState<Role | null>(null)
   const [basics, setBasics] = useState<Basics>({ name: me.data?.user.name ?? '', language: 'en', background: '' })
+  const [home, setHome] = useState<LatLon | null>(null)
   const [helper, setHelper] = useState<HelperProfile>(EMPTY_HELPER)
   const [flags, setFlags] = useState<RequesterFlags>(EMPTY_FLAGS)
 
@@ -36,6 +38,7 @@ export default function Onboarding() {
         name: basics.name.trim(),
         language: basics.language,
         background: basics.background.trim(),
+        ...(home ? { home_location: home } : {}),
         ...(role === 'helper' ? { helper: { ...helper, about: helper.about.trim() } } : { requester_flags: flags }),
       },
       { onSuccess: (data) => navigate(homeFor(data.user.role), { replace: true }) },
@@ -73,6 +76,13 @@ export default function Onboarding() {
       {role && (
         <>
           <BasicsFields role={role} value={basics} onChange={setBasics} />
+          <section>
+            <h2 className="text-xl font-extrabold">Home location <span className="text-base font-normal text-ink-soft">(optional)</span></h2>
+            <p className="mt-1 text-sm text-ink-soft">{role === 'helper' ? 'Used to find requests near you. Requesters nearby see only an approximate area (about 500 m), never your address or name. You can turn that off in your volunteer profile.' : 'Saves you re-entering it when you ask for help. Only you can see it.'}</p>
+            <div className="mt-3">
+              <LocationPicker value={home} onChange={setHome} clearable />
+            </div>
+          </section>
           {role === 'helper' ? (
             <HelperProfileFields value={helper} onChange={setHelper} />
           ) : (

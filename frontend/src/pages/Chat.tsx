@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ApiError } from '../api/client'
 import { listMessages, sendMessage, useMe, useRequest, useRequestAction } from '../api/hooks'
 import { homeFor } from '../auth/home'
+import LiveTracking from '../components/LiveTracking'
 import { Button, ErrorText, Loading, inputClass } from '../components/ui'
 import { STATUS_LABELS } from '../lib/labels'
 import type { HelpRequest, Message, RequesterFlags } from '../lib/types'
@@ -138,6 +139,10 @@ export default function Chat() {
           <span className="font-semibold">Your request: </span>
           {request.text}
         </p>
+      )}
+
+      {request.status === 'CLAIMED' && request.viewer_relation !== 'other' && (
+        <LiveTracking request={request} otherName={other ?? (isHelper ? 'the requester' : 'your volunteer')} />
       )}
 
       {!chatOpen && request.viewer_relation !== 'other' && (

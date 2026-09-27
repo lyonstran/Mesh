@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Literal
 
 from app.models import RequestStatus, held_roles
+from app.services.geo import from_geojson
 
 Relation = Literal["requester", "assigned_helper", "other"]
 
@@ -35,6 +36,7 @@ def public_user(user: dict) -> dict:
         "picture": user.get("picture"),
         "role": user.get("role"),
         "roles": held_roles(user),
+        "home_location": from_geojson(user.get("home_location")),
         "language": user.get("language", "en"),
         "background": user.get("background", ""),
         "helper": user.get("helper"),
@@ -76,8 +78,13 @@ def serialize_request(
     }
     if score is not None:
         out["score"] = round(score, 4)
+    # Everyone sees the fuzzed point; the exact one is only for the two people on the request (PLAN.md §9.6).
+    if display := from_geojson(req.get("display_location")):
+        out["display_location"] = display
     if rel == "other":
         return out
+    if exact := from_geojson(req.get("location")):
+        out["location"] = exact
 
     out |= {
         "claimed_at": _iso(req.get("claimed_at")),

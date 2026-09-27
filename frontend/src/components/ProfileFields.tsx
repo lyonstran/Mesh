@@ -3,6 +3,7 @@ import { LANGUAGES, RESOURCE_LABELS, SKILL_LABELS } from '../lib/labels'
 import {
   MAX_CUSTOM_SKILL_LENGTH,
   MAX_CUSTOM_SKILLS,
+  MAX_RADIUS_KM,
   RESOURCES,
   SKILLS,
   type HelperProfile,
@@ -208,6 +209,34 @@ export function HelperProfileFields({ value, onChange }: { value: HelperProfile;
           maxLength={1000}
         />
       </Field>
+      <Field label="How far will you travel?" hint="Measured from your home location.">
+        <div className="flex items-center gap-3">
+          <input
+            type="range"
+            min={1}
+            max={MAX_RADIUS_KM}
+            step={1}
+            value={value.radius_km}
+            onChange={(e) => onChange({ ...value, radius_km: Number(e.target.value) })}
+            className="w-full accent-emerald-600"
+          />
+          <span className="w-16 shrink-0 text-right font-semibold">{value.radius_km} km</span>
+        </div>
+      </Field>
+      <label className="flex items-start gap-3 rounded-lg bg-surface p-3">
+        <input
+          type="checkbox"
+          className="mt-1 size-5 shrink-0 accent-emerald-600"
+          checked={value.show_area_to_requesters}
+          onChange={(e) => onChange({ ...value, show_area_to_requesters: e.target.checked })}
+        />
+        <span>
+          <span className="font-semibold">Show my approximate area to people asking for help nearby</span>
+          <span className="mt-0.5 block text-sm text-ink-soft">
+            They see a circle about 500 m across around your home location, never your name, address or skills.
+          </span>
+        </span>
+      </label>
     </div>
   )
 }

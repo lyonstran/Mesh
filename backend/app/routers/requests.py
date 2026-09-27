@@ -5,10 +5,13 @@ from fastapi import APIRouter, BackgroundTasks, Depends
 from pymongo import ReturnDocument
 from pymongo.asynchronous.database import AsyncDatabase
 
+from app.config import get_settings
 from app.deps import get_database, parse_object_id, require_onboarded, require_role
 from app.errors import APIError
 from app.models import ACTIVE_STATUSES, RequestCreate, RequestStatus, Role, TextIn, held_roles
-from app.services import ranking
+from app.services import presence, ranking
+from app.services.fuzz import fuzz_point
+from app.services.geo import to_geojson
 from app.services.indexing import refresh_request_embedding
 from app.services.rules import is_emergency
 from app.services.serialize import relation, serialize_request
@@ -71,6 +74,7 @@ async def _transition(
     )
     if updated is None:
         raise APIError(409, "CONFLICT", "This request changed; refresh and try again")
+    await presence.clear_request(database, req["_id"])  # release, resolve and cancel all end live sharing
     return updated
 
 
@@ -91,7 +95,9 @@ async def create(
         raise APIError(409, "ACTIVE_REQUEST_EXISTS", "You already have an active request")
     emergency = is_emergency(body.text)
     now = datetime.now(UTC)
+    request_id = ObjectId()
     doc = {
+        "_id": request_id,
         "requester_id": user["_id"],
         "text": body.text,
         "language": user.get("language", "en"),
@@ -104,7 +110,11 @@ async def create(
         "created_at": now,
         "updated_at": now,
     }
-    doc["_id"] = (await database.requests.insert_one(doc)).inserted_id
+    if body.location:
+        fuzzed_lat, fuzzed_lon = fuzz_point(body.location.lat, body.location.lon, str(request_id), get_settings().jwt_secret)
+        doc["location"] = to_geojson(body.location.lat, body.location.lon)
+        doc["display_location"] = to_geojson(fuzzed_lat, fuzzed_lon)
+    await database.requests.insert_one(doc)
     background.add_task(refresh_request_embedding, database, doc["_id"], body.text)
     return {"request": await _serialize_one(database, doc, user), "show_911": emergency}
 

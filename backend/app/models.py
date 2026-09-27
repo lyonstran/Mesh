@@ -58,11 +58,22 @@ MAX_CUSTOM_SKILLS = 10
 MAX_CUSTOM_SKILL_LENGTH = 40
 
 
+MAX_RADIUS_KM = 15
+DEFAULT_RADIUS_KM = 10
+
+
+class GeoPoint(BaseModel):
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
+
+
 class HelperProfile(BaseModel):
     skills: list[Skill] = []
     custom_skills: list[str] = []  # volunteer-entered skills not in the Skill enum
     resources: list[Resource] = []
     about: str = Field("", max_length=1000)  # "What I can offer"
+    radius_km: float = Field(DEFAULT_RADIUS_KM, ge=1, le=MAX_RADIUS_KM)  # how far from home_location they will travel
+    show_area_to_requesters: bool = True  # appear as a fuzzed area on nearby requesters' maps (opt-out)
 
     @field_validator("custom_skills")
     @classmethod
@@ -102,6 +113,7 @@ class OnboardingIn(BaseModel):
     name: str = Field(min_length=1, max_length=80)
     language: str = Field("en", min_length=2, max_length=10)
     background: str = Field("", max_length=1000)
+    home_location: GeoPoint | None = None
     helper: HelperProfile | None = None
     requester_flags: RequesterFlags | None = None
 
@@ -111,6 +123,7 @@ class ProfileUpdate(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=80)
     language: str | None = Field(None, min_length=2, max_length=10)
     background: str | None = Field(None, max_length=1000)
+    home_location: GeoPoint | None = None  # send null to clear
     helper: HelperProfile | None = None
     requester_flags: RequesterFlags | None = None
 
@@ -127,6 +140,7 @@ class TextIn(BaseModel):
 
 class RequestCreate(BaseModel):
     text: str = Field(min_length=3, max_length=1000)
+    location: GeoPoint | None = None  # optional so the API degrades gracefully; the app asks for it
 
 
 class MessageCreate(BaseModel):

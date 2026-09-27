@@ -1,19 +1,27 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useCheckEmergency, useCreateRequest, useMyRequests, useRequestAction } from '../api/hooks'
+import { useCheckEmergency, useCreateRequest, useMe, useMyRequests, useNearbyVolunteers, useRequestAction } from '../api/hooks'
 import EmergencyInterstitial from '../components/EmergencyInterstitial'
+import LiveTracking from '../components/LiveTracking'
+import { LocationPicker, VolunteersMap } from '../components/map/lazy'
 import { Button, ErrorText, Loading, inputClass } from '../components/ui'
 import { STATUS_LABELS, timeAgo } from '../lib/labels'
 import { stagger } from '../lib/motion'
-import type { HelpRequest } from '../lib/types'
+import type { HelpRequest, LatLon } from '../lib/types'
 
 function NewRequestForm() {
+  const me = useMe()
   const [text, setText] = useState('')
+  const [location, setLocation] = useState<LatLon | null>(me.data?.user.home_location ?? null)
   const [showEmergency, setShowEmergency] = useState(false)
   const check = useCheckEmergency()
   const create = useCreateRequest()
 
-  const send = () => create.mutate(text.trim(), { onSuccess: () => setShowEmergency(false) })
+  const send = () =>
+    create.mutate(
+      { text: text.trim(), ...(location ? { location } : {}) },
+      { onSuccess: () => setShowEmergency(false) },
+    )
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -37,14 +45,44 @@ function NewRequestForm() {
         onChange={(e) => setText(e.target.value)}
         maxLength={1000}
       />
-      <Button type="submit" variant="accent" className="mt-4 w-full text-lg" disabled={text.trim().length < 3 || check.isPending || create.isPending}>
+      <section className="mt-6">
+        <h2 className="text-xl font-extrabold">Where are you?</h2>
+        <p className="mt-1 text-sm text-ink-soft">
+          Volunteers see only an approximate area (within about 500 m). Your exact spot goes only to the volunteer who takes your request.
+        </p>
+        <div className="mt-3">
+          <LocationPicker value={location} onChange={setLocation} />
+        </div>
+      </section>
+      <Button type="submit" variant="accent" className="mt-6 w-full text-lg" disabled={text.trim().length < 3 || !location || check.isPending || create.isPending}>
         {check.isPending || create.isPending ? 'Sending…' : 'Ask for help'}
       </Button>
+      {!location && text.trim().length >= 3 && <p className="mt-2 text-sm text-ink-soft">Set your location so a nearby volunteer can find you.</p>}
       <ErrorText error={check.error ?? create.error} />
       {showEmergency && (
         <EmergencyInterstitial busy={create.isPending} onContinue={send} onBack={() => setShowEmergency(false)} />
       )}
     </form>
+  )
+}
+
+/** Approximate areas of volunteers around the requester, shown while the request is waiting for someone to pick it up. */
+function NearbyVolunteers({ center }: { center: LatLon | null }) {
+  const nearby = useNearbyVolunteers(center)
+  if (!center || nearby.isPending || nearby.error) return null
+  const count = nearby.data.volunteers.length
+  return (
+    <section className="mt-6">
+      <h2 className="text-xl font-extrabold">Volunteers near you</h2>
+      <p className="mt-1 text-sm text-ink-soft">
+        {count === 0
+          ? 'No volunteers are showing an area near you right now. Your request is still visible to every volunteer, and new ones see it as soon as they open Mesh.'
+          : `${count} ${count === 1 ? 'volunteer is' : 'volunteers are'} sharing an approximate area near you. Circles are about 500 m across, never an address.`}
+      </p>
+      <div className="mt-3">
+        <VolunteersMap center={center} volunteers={nearby.data.volunteers} />
+      </div>
+    </section>
   )
 }
 
@@ -67,6 +105,9 @@ function ActiveRequest({ request }: { request: HelpRequest }) {
         </p>
         <p className="mt-2 text-lg">{request.text}</p>
       </div>
+
+      {claimed && <div className="mt-6"><LiveTracking request={request} otherName={request.helper?.name ?? 'your volunteer'} /></div>}
+      {request.status === 'OPEN' && <NearbyVolunteers center={request.location ?? request.display_location ?? null} />}
 
       <div className="mt-5 grid gap-3">
         {claimed && (

@@ -72,7 +72,11 @@ async def ensure_indexes(db: AsyncDatabase, hazard_cache_seconds: int) -> None:
     await db.users.create_index("email")
 
     await db.presence.create_index([("location", GEOSPHERE)])
-    await db.presence.create_index("user_id", unique=True)
+    # Presence is per (user, request). Drop the legacy unique index on user_id alone if an older run created it.
+    if "user_id_1" in await db.presence.index_information():
+        await db.presence.drop_index("user_id_1")
+    await db.presence.create_index([("user_id", ASCENDING), ("request_id", ASCENDING)], unique=True)
+    await db.presence.create_index("request_id")
     await _ensure_ttl(db, "presence", "updated_at", 120)
 
     await db.requests.create_index([("location", GEOSPHERE)])

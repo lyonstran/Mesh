@@ -77,7 +77,18 @@ A user can hold both a Volunteer profile and a Requester profile on the same acc
 - Seed data.
 
 ### Out of scope for the MVP
-Location, fuzzing, and maps; hazards and simulation; EJI and tracts; triage category/urgency and the priority formula; voice; the coordinator role; WebSocket realtime; translation; verified-helper rules; social-media leads. See §21.
+Location, fuzzing, and maps; hazards and simulation; EJI and tracts; triage category/urgency and the priority formula; voice; the coordinator role; WebSocket realtime; translation; verified-helper rules; social-media leads. See §21. (Iteration 2 below brings the first four back into scope.)
+
+### Iteration 2: location, map, tracts/EJI, hazards, matching (in scope)
+Built in four phases, each ending with tests and a team check before the next. Specs are §4 (data), §7 (hazards), §9.4-9.6 (priority, fuzzing, serializer) and §10 (live location); this list says what changes for the MVP.
+1. **Location and map.** Requests carry an exact `location` and a deterministic fuzzed `display_location` (300-500 m). Volunteers set a `home_location` and `radius_km` (default 10, max 15 km); requesters may set a home location. `GET /api/geocode?q=` (Census geocoder) or a dropped pin sets a location. Maps use Leaflet + OpenStreetMap tiles with attribution.
+2. **Data sources.** `data/` loads Georgia tracts with EJI 2024 ranks into Mongo (`tracts`). Requests store `tract_geoid`, `eji_rank`, `hazard_snapshot` and `hazard_level` at create time. Hazards come from NWS + Open-Meteo (§7), always `simulated: false` here (simulation mode stays deferred).
+3. **Matching.** The volunteer list is a blended score: fit (embedding similarity, §0.1) + proximity + need (`priority`, §9.4, using the rules urgency floor since there is no LLM triage yet). Hard filters: within radius, fewer than 2 active claims. Distance uses `display_location`. Each request returns a per-factor `breakdown`; weights are designed defaults, not fitted.
+4. **Live location.** After a claim, both parties share location with each other only, via polling (`POST/GET /api/requests/{id}/location`), until the request is released, resolved or cancelled. Only the latest point is stored (TTL), keyed by `(user_id, request_id)`. When the other person is a `demo: true` account with no real presence (and `DEMO_LOGIN` is on), `GET` returns a moving position around their location with `simulated: true`, and the UI shows a SIMULATED badge (§14 rule 7); it is never stored.
+
+5. **Volunteers on the requester's map.** `GET /api/volunteers/nearby?lat&lon&radius_km` (requester only) returns volunteers' fuzzed `display_location` and nothing else: no id, name, skills or exact point. Each volunteer's point is fuzzed 300-500 m with the same HMAC scheme, keyed by their user id, so it is stable between calls. Volunteers can opt out with `helper.show_area_to_requesters` (default true).
+
+Privacy for Iteration 2: exact location goes only to the requester and the assigned volunteer; every other viewer gets `display_location`. The other party's live location is never part of `serialize_request`; it has its own endpoint that enforces the same two-party rule.
 
 ### Similarity ranking
 1. **Text to embed:**
@@ -112,6 +123,7 @@ Location, fuzzing, and maps; hazards and simulation; EJI and tracts; triage cate
 | POST | `/api/requests/{id}/resolve` | requester or assigned volunteer | |
 | POST | `/api/requests/{id}/cancel` | requester | |
 | GET/POST | `/api/requests/{id}/messages` | requester + assigned volunteer | `?after=<iso>` for polling |
+| POST/GET/DELETE | `/api/requests/{id}/location` | requester + assigned volunteer, only while `CLAIMED` | POST shares your point (≥5 s apart; extra updates are dropped, not errors); GET returns only the *other* person's point; DELETE pauses sharing. 409 `NOT_ACTIVE` otherwise, 403 for everyone else |
 
 ### MVP privacy (serializer, §9.6 adapted)
 | Viewer | Request text | Requester name / flags | Chat |
@@ -603,7 +615,7 @@ defaults: W_u=0.45, W_h=0.20, W_e=0.20, W_w=0.15
 - Weights are **designed defaults, not fitted**. The UI and docs must say so.
 
 ### 9.5 Location fuzzing (`services/fuzz.py`)
-- Deterministic: seed a PRNG with `request_id`. Pick a random bearing and a distance of 300–500 m, and offset the point. The same request always produces the same fuzzed point.
+- Deterministic: seed a PRNG with `HMAC-SHA256(server secret, request_id)`. Pick a random bearing and a distance of 300–500 m, and offset the point. The same request always produces the same fuzzed point. The secret matters: request ids are visible to every volunteer, so seeding with the id alone would let anyone replay the generator and subtract the offset.
 
 ### 9.6 Viewer-aware serialization (`services/serialize.py`), mandatory
 `serialize_request(req, viewer)` returns:
@@ -1042,10 +1054,8 @@ Extends §9.9 and the §0.1 similarity ranking.
 - **Coordinator UI:** a leads queue with label, confidence, reasons, bucket, and confirm/dismiss actions.
 
 ### 21.3 Deferred from the full plan
-Everything in §§4–13 not listed in §0.1:
-- location, fuzzing, and maps;
-- hazards and simulation;
-- EJI and tracts;
+Everything in §§4–13 not listed in §0.1 or Iteration 2:
+- simulation mode (hazards, EJI, tracts, location, fuzzing and maps moved to Iteration 2);
 - triage category/urgency and priority;
 - voice (transcribe and TTS);
 - the coordinator dashboard;

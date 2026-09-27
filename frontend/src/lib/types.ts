@@ -49,11 +49,38 @@ export type Resource = (typeof RESOURCES)[number]
 export const MAX_CUSTOM_SKILLS = 10
 export const MAX_CUSTOM_SKILL_LENGTH = 40
 
+// Mirror MAX_RADIUS_KM / DEFAULT_RADIUS_KM in backend/app/models.py.
+export const MAX_RADIUS_KM = 15
+export const DEFAULT_RADIUS_KM = 10
+
+/** API shape for a point: {lat, lon}. (Mongo stores GeoJSON [lon, lat]; only the backend touches that.) */
+export interface LatLon {
+  lat: number
+  lon: number
+}
+
+export interface GeocodeMatch extends LatLon {
+  label: string
+}
+
 export interface HelperProfile {
   skills: Skill[]
   custom_skills: string[] // volunteer-entered skills not in SKILLS
   resources: Resource[]
   about: string
+  radius_km: number // how far from home_location the volunteer will travel
+  show_area_to_requesters: boolean // appear as an approximate area on nearby requesters' maps
+}
+
+/** The other person's latest shared point on a claimed request. */
+export interface LiveLocation extends LatLon {
+  updated_at: string
+  age_s: number // seconds since they last sent it
+}
+
+/** A volunteer as a requester sees them: an approximate area, nothing else. */
+export interface NearbyVolunteer {
+  display_location: LatLon
 }
 
 export interface RequesterFlags {
@@ -69,6 +96,7 @@ export interface User {
   picture: string | null
   role: Role | null // active mode: decides the home page
   roles: Role[] // profiles the account holds; endpoint guards check this, not `role`
+  home_location: LatLon | null
   language: string
   background: string
   helper: HelperProfile | null
@@ -86,6 +114,7 @@ export interface OnboardingBody {
   name: string
   language: string
   background: string
+  home_location?: LatLon
   helper?: HelperProfile
   requester_flags?: RequesterFlags
 }
@@ -102,6 +131,7 @@ export interface ProfileUpdate {
   name?: string
   language?: string
   background?: string
+  home_location?: LatLon | null // null clears it
   helper?: HelperProfile
   requester_flags?: RequesterFlags
 }
@@ -133,7 +163,9 @@ export interface HelpRequest {
   updated_at: string
   viewer_relation: 'requester' | 'assigned_helper' | 'other'
   score?: number
+  display_location?: LatLon // fuzzed (300-500 m); everyone sees this
   // Only for the requester and the assigned volunteer:
+  location?: LatLon // exact
   claimed_at?: string | null
   resolved_at?: string | null
   timeline?: TimelineEntry[]
