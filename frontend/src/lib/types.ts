@@ -45,8 +45,13 @@ export const RESOURCES = [
 ] as const
 export type Resource = (typeof RESOURCES)[number]
 
+// Limits mirror MAX_CUSTOM_SKILLS / MAX_CUSTOM_SKILL_LENGTH in backend/app/models.py.
+export const MAX_CUSTOM_SKILLS = 10
+export const MAX_CUSTOM_SKILL_LENGTH = 40
+
 export interface HelperProfile {
   skills: Skill[]
+  custom_skills: string[] // volunteer-entered skills not in SKILLS
   resources: Resource[]
   about: string
 }
@@ -79,6 +84,14 @@ export interface OnboardingBody {
   name: string
   language: string
   background: string
+  helper?: HelperProfile
+  requester_flags?: RequesterFlags
+}
+
+export interface ProfileUpdate {
+  name?: string
+  language?: string
+  background?: string
   helper?: HelperProfile
   requester_flags?: RequesterFlags
 }

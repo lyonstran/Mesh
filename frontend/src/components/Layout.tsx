@@ -17,11 +17,16 @@ export default function Layout() {
           </Link>
           {user && (
             <div className="flex items-center gap-3 text-sm">
-              <span className="max-w-32 truncate text-white/80">{user.name}</span>
+              <span className="hidden max-w-32 truncate text-white/80 sm:inline">{user.name}</span>
               {user.role && (
                 <span className="rounded bg-porch px-1.5 py-0.5 text-xs font-semibold text-ink">
                   {user.role === 'helper' ? 'Volunteer' : 'Requester'}
                 </span>
+              )}
+              {user.role && (
+                <Link to="/profile" className="flex min-h-10 items-center rounded-md px-2 font-semibold underline-offset-4 hover:underline">
+                  Profile
+                </Link>
               )}
               <button
                 type="button"

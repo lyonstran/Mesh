@@ -115,7 +115,7 @@ Same four lanes and branches. Each lane's tasks are **in order**: finish and mer
 5. **B5 Lead conversion:** the confirmed-lead → request path and the verified-only rule for social-sourced requests (PLAN.md §21.2), once D's leads land.
 
 **Lane C: UI** (`lane/c-ui`)
-1. **C1 Profile page:** edit name, background, skills, and "What can you offer?" (`PATCH /api/me` already exists and re-embeds the profile), switch roles, and sign out.
+1. **C1 Profile page:** ~~edit name, background, skills (including custom skills), and "What can you offer?"~~ Done: `/profile`. Still open: switching roles from the profile page (`PATCH /api/me` already supports it).
 2. **C2 Polish:** fix issues from everyone's MVP testing; add a status timeline on the requester page.
 3. **C3 Matching v2 UI:** need-coverage checklist per matched helper, the "Matched by AI" reason, and the accept/decline prompt for suggested matches (with A4 and D2).
 4. **C4 Leads queue:** coordinator page with label, confidence, reasons, bucket, a SYNTHETIC badge on every lead, and confirm/dismiss (with D4).

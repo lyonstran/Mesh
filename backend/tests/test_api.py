@@ -146,3 +146,25 @@ def test_demo_login_lists_only_demo_users(env):
     assert [u["name"] for u in users] == ["Demo Helper"]
     resp = env.client.post("/api/auth/demo", json={"user_id": str(demo["_id"])})
     assert resp.status_code == 200 and "session" in resp.cookies
+
+
+def test_volunteer_edits_profile_and_ranking_follows(env):
+    tree = _create_request(env, "A tree fell on my roof and someone needs to climb up and cut it")[0]["request"]
+    water = _create_request(env, "We need drinking water delivered")[0]["request"]
+    headers = env.onboard_helper("Sam", "I can deliver drinking water")
+    assert env.client.get("/api/requests/ranked", headers=headers).json()["requests"][0]["id"] == water["id"]
+
+    body = {"helper": {"skills": ["chainsaw"], "custom_skills": ["tree climbing", "Tree Climbing"], "resources": ["truck"],
+                       "about": "I climb and cut up fallen trees on roofs"}}
+    resp = env.client.patch("/api/me", json=body, headers=headers)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["user"]["helper"]["custom_skills"] == ["tree climbing"]
+    assert "tree climbing" in env.raw.users.find_one({"name": "Sam"})["profile_text"]
+    assert env.client.get("/api/requests/ranked", headers=headers).json()["requests"][0]["id"] == tree["id"]
+
+
+def test_custom_skill_validation_error_shape(env):
+    headers = env.onboard_helper("Sam", "anything")
+    resp = env.client.patch("/api/me", json={"helper": {"custom_skills": ["x" * 41]}}, headers=headers)
+    assert resp.status_code == 422
+    assert resp.json()["error"]["code"] == "VALIDATION_ERROR"

@@ -7,6 +7,7 @@ import ErrorPage from './pages/ErrorPage'
 import Landing from './pages/Landing'
 import Login from './pages/Login'
 import Onboarding from './pages/Onboarding'
+import Profile from './pages/Profile'
 import RequesterHome from './pages/RequesterHome'
 import VolunteerHome from './pages/VolunteerHome'
 
@@ -32,6 +33,7 @@ export const router = createBrowserRouter([
       { path: '/r', element: <RoleGuard role="requester"><RequesterHome /></RoleGuard> },
       { path: '/h', element: <RoleGuard role="helper"><VolunteerHome /></RoleGuard> },
       { path: '/chat/:requestId', element: <Chat /> },
+      { path: '/profile', element: <Profile /> },
     ],
   },
   { path: '*', element: <Navigate to="/" replace /> },

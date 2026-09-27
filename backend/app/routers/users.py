@@ -12,6 +12,9 @@ from app.services.serialize import public_user
 
 router = APIRouter()
 
+def _empty_helper() -> dict:
+    return {"skills": [], "custom_skills": [], "resources": [], "about": ""}
+
 
 async def _save_profile(database: AsyncDatabase, user: dict, fields: dict) -> dict:
     merged = user | fields
@@ -31,7 +34,7 @@ async def onboarding(
         raise APIError(409, "ALREADY_ONBOARDED", "Already onboarded; edit your profile instead")
     fields = body.model_dump(mode="json")
     if body.role == Role.helper:
-        fields["helper"] = fields["helper"] or {"skills": [], "resources": [], "about": ""}
+        fields["helper"] = fields["helper"] or _empty_helper()
         fields["requester_flags"] = None
     else:
         fields["helper"] = None
@@ -53,6 +56,6 @@ async def update_me(
         if active:
             raise APIError(409, "ACTIVE_REQUEST", "Finish or cancel your active request before switching roles")
         if fields["role"] == Role.helper and not (fields.get("helper") or user.get("helper")):
-            fields["helper"] = {"skills": [], "resources": [], "about": ""}
+            fields["helper"] = _empty_helper()
     user = await _save_profile(database, user, fields)
     return {"user": public_user(user), "needs_onboarding": False}

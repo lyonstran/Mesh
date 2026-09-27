@@ -5,8 +5,9 @@ def helper_profile_text(user: dict) -> str:
     """Everything about a volunteer that should drive matching, as one string."""
     helper = user.get("helper") or {}
     parts = []
-    if helper.get("skills"):
-        parts.append("Skills: " + ", ".join(s.replace("_", " ") for s in helper["skills"]))
+    skills = [s.replace("_", " ") for s in helper.get("skills", [])] + list(helper.get("custom_skills", []))
+    if skills:
+        parts.append("Skills: " + ", ".join(skills))
     if helper.get("resources"):
         parts.append("Resources: " + ", ".join(r.replace("_", " ") for r in helper["resources"]))
     if helper.get("about"):

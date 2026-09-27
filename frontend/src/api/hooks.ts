@@ -5,6 +5,7 @@ import type {
   MeResponse,
   Message,
   OnboardingBody,
+  ProfileUpdate,
   RankedResponse,
 } from '../lib/types'
 import { api, post } from './client'
@@ -68,6 +69,18 @@ export function useOnboarding() {
   return useMutation({
     mutationFn: (body: OnboardingBody) => post<MeResponse>('/api/onboarding', body),
     onSuccess: (data) => qc.setQueryData(keys.me, data),
+  })
+}
+
+export function useUpdateProfile() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: ProfileUpdate) => api<MeResponse>('/api/me', { method: 'PATCH', json: body }),
+    onSuccess: (data) => {
+      qc.setQueryData(keys.me, data)
+      // A volunteer's profile is re-embedded on save, so their ranking changes.
+      qc.invalidateQueries({ queryKey: keys.ranked })
+    },
   })
 }
 

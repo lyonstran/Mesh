@@ -178,3 +178,28 @@ def test_demo_endpoints_404_when_flag_off(app_without_db):
 def test_me_requires_login(app_without_db):
     # Without a DB the dependency reports 503 before auth; either way no user data leaks.
     assert app_without_db.get("/api/me").status_code in (401, 503)
+
+
+# --- custom skills -----------------------------------------------------------------
+
+from pydantic import ValidationError  # noqa: E402
+
+from app.models import MAX_CUSTOM_SKILL_LENGTH, MAX_CUSTOM_SKILLS, HelperProfile  # noqa: E402
+from app.services.profile import helper_profile_text  # noqa: E402
+
+
+def test_custom_skills_are_trimmed_and_deduplicated():
+    profile = HelperProfile(custom_skills=["  tree   climbing ", "Tree Climbing", "", "   ", "Sign language"])
+    assert profile.custom_skills == ["tree climbing", "Sign language"]
+
+
+def test_custom_skill_limits():
+    with pytest.raises(ValidationError):
+        HelperProfile(custom_skills=["x" * (MAX_CUSTOM_SKILL_LENGTH + 1)])
+    with pytest.raises(ValidationError):
+        HelperProfile(custom_skills=[f"skill {i}" for i in range(MAX_CUSTOM_SKILLS + 1)])
+
+
+def test_profile_text_includes_custom_skills():
+    user = {"helper": {"skills": ["heavy_lifting"], "custom_skills": ["Tree climbing"], "resources": [], "about": ""}}
+    assert helper_profile_text(user) == "Skills: heavy lifting, Tree climbing"

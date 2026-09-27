@@ -2,7 +2,7 @@
 
 from enum import StrEnum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class Role(StrEnum):
@@ -48,10 +48,33 @@ class Resource(StrEnum):
     medical_kit = "medical_kit"
 
 
+MAX_CUSTOM_SKILLS = 10
+MAX_CUSTOM_SKILL_LENGTH = 40
+
+
 class HelperProfile(BaseModel):
     skills: list[Skill] = []
+    custom_skills: list[str] = []  # volunteer-entered skills not in the Skill enum
     resources: list[Resource] = []
     about: str = Field("", max_length=1000)  # "What I can offer"
+
+    @field_validator("custom_skills")
+    @classmethod
+    def _clean_custom_skills(cls, value: list[str]) -> list[str]:
+        """Trim, collapse whitespace, drop blanks and case-insensitive duplicates, enforce limits."""
+        cleaned: list[str] = []
+        seen: set[str] = set()
+        for raw in value:
+            skill = " ".join(raw.split())
+            if not skill or skill.casefold() in seen:
+                continue
+            if len(skill) > MAX_CUSTOM_SKILL_LENGTH:
+                raise ValueError(f"Custom skills can be at most {MAX_CUSTOM_SKILL_LENGTH} characters")
+            seen.add(skill.casefold())
+            cleaned.append(skill)
+        if len(cleaned) > MAX_CUSTOM_SKILLS:
+            raise ValueError(f"You can add at most {MAX_CUSTOM_SKILLS} custom skills")
+        return cleaned
 
 
 class RequesterFlags(BaseModel):

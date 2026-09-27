@@ -78,7 +78,10 @@ export default function VolunteerHome() {
       <section>
         <h1 className="text-3xl font-extrabold">Requests that fit you</h1>
         <p className="mt-2 text-ink-soft">
-          Ranked by how closely each request matches the skills and offer in your profile. The list refreshes on its own.
+          Ranked by how closely each request matches the skills and offer in your profile. The list refreshes on its own.{' '}
+          <Link to="/profile" className="font-semibold text-ink underline underline-offset-4">
+            Edit your skills
+          </Link>
         </p>
 
         {alreadyTaken && <p role="status" className="mt-4 rounded-lg bg-porch-soft p-3">Another volunteer just picked that one. Here's the updated list.</p>}
@@ -88,7 +91,10 @@ export default function VolunteerHome() {
         {ranked.error && <ErrorText error={ranked.error} />}
         {ranked.data && !ranked.data.profile_embedded && (
           <p className="mt-4 rounded-lg bg-porch-soft p-3">
-            Add skills or describe what you can offer so we can rank requests for you. Until then, newest requests come first.
+            <Link to="/profile" className="font-semibold underline underline-offset-4">
+              Add skills or describe what you can offer
+            </Link>{' '}
+            so we can rank requests for you. Until then, newest requests come first.
           </p>
         )}
         {ranked.data?.requests.length === 0 && (

@@ -46,7 +46,7 @@ The MVP is a working prototype the team builds on afterwards. Both sides are reg
 ### User journeys
 - **Volunteer** (role `helper`, shown as "Volunteer" in the UI):
   1. Signs in with Google.
-  2. Onboarding: name, language, background, skills and resources (enums from §6), and a free-text "What I can offer."
+  2. Onboarding: name, language, background, skills and resources (enums from §6), up to 10 custom skills of their own ("+ Add your own", max 40 characters each), and a free-text "What I can offer." Everything can be edited later on `/profile`; saving re-embeds the profile.
   3. Sees open requests **ranked purely by vector similarity** between each request and their profile.
   4. Picks a request (atomic claim) and goes to a private chat with that requester.
 - **Requester:**
@@ -73,7 +73,7 @@ Location, fuzzing, and maps; hazards and simulation; EJI and tracts; triage cate
 ### Similarity ranking
 1. **Text to embed:**
    - For a request: the request text.
-   - For a volunteer: skills + resources + "What I can offer" + background, joined into `profile_text`.
+   - For a volunteer: skills (listed and custom) + resources + "What I can offer" + background, joined into `profile_text`.
 2. **Normalize (optional, Muse Spark):** when `LLM_PROVIDER=muse`, Spark rewrites the text into a short list of needs (request) or capabilities (volunteer) before embedding. Under `mock` the text passes through unchanged.
 3. **Embed:** `fastembed` runs `sentence-transformers/all-MiniLM-L6-v2` locally (384 dimensions, ONNX, about 90 MB downloaded on first use). The Meta Model API has no embeddings endpoint (checked 2026-09-26), so vectors come from this local model.
    - We use `fastembed` instead of the `sentence-transformers` package because it runs the same model without PyTorch and fits the smallest Vultr VM.
@@ -110,7 +110,7 @@ Location, fuzzing, and maps; hazards and simulation; EJI and tracts; triage cate
 | Other volunteers | yes (plus score) | no | no |
 
 ### Pages
-`/login`, `/onboarding`, `/r` (requester: submit form, current request, chat link), `/h` (volunteer: my active chats plus the ranked list), `/chat/:requestId`. Polling intervals: chat every 3 s, requester status every 5 s, ranked list every 10 s.
+`/` (public landing page), `/login`, `/onboarding`, `/profile` (edit onboarding details), `/r` (requester: submit form, current request, chat link), `/h` (volunteer: my active chats plus the ranked list), `/chat/:requestId`. Polling intervals: chat every 3 s, requester status every 5 s, ranked list every 10 s.
 
 ### Hard rules that bind the MVP
 All of §14 still applies. In particular:
