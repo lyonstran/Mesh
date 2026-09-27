@@ -217,10 +217,43 @@ export interface RequestCreateBody {
   category_override?: Category // the requester's pick on the preview card; never changes urgency
 }
 
+export type MatchFactorKey = 'fit' | 'proximity' | 'need'
+export type MatchFlag = 'no_embedding' | 'no_home_location' | 'no_request_location'
+export type EjiBand = 'Very high' | 'High' | 'Moderate' | 'Lower' | 'Unknown'
+
+/** One part of `need`. EJI is a coarse band only; the raw rank never leaves the backend. */
+export type NeedPart =
+  | { key: 'urgency' | 'hazard' | 'wait'; raw: number; weight: number; contribution: number; source: string }
+  | { key: 'eji'; band: EjiBand; weight: number; source: string }
+
+/** One factor of the blended match score (0-1 value times weight). A null input counts as 0.5 and is flagged. */
+export interface MatchFactor {
+  key: MatchFactorKey
+  value: number
+  weight: number
+  contribution: number
+  source: string
+  flag: MatchFlag | null
+  detail?: NeedPart[] // only on `need`
+}
+
 export interface RankedResponse {
-  requests: HelpRequest[]
+  requests: RankedRequest[]
   vector_search: VectorSearchMode
   profile_embedded: boolean
+  home_set: boolean
+  radius_km: number
+  active_claims: number
+  claim_limit: number
+  claim_limit_reached: boolean
+  weights_note: string // "Weights are designed defaults, not fitted."
+}
+
+/** A request in the volunteer feed: blended score, rounded distance from its approximate area, and why. */
+export interface RankedRequest extends HelpRequest {
+  match_score: number
+  distance_km: number | null
+  breakdown: MatchFactor[]
 }
 
 export interface Message {

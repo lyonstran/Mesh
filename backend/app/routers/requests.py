@@ -9,7 +9,7 @@ from app.config import get_settings
 from app.deps import get_database, parse_object_id, require_onboarded, require_role
 from app.errors import APIError
 from app.models import ACTIVE_STATUSES, RequestCreate, RequestStatus, Role, TextIn, Triage, held_roles
-from app.services import preview_cache, presence, priority, ranking
+from app.services import matching, preview_cache, presence, priority, ranking
 from app.services.fuzz import fuzz_point
 from app.services.geo import to_geojson
 from app.services.hazards import get_hazards
@@ -78,6 +78,7 @@ async def _transition(
     if updated is None:
         raise APIError(409, "CONFLICT", "This request changed; refresh and try again")
     await presence.clear_request(database, req["_id"])  # release, resolve and cancel all end live sharing
+    await _store_priority(database, updated)
     return updated
 
 
@@ -212,15 +213,39 @@ async def mine(user: dict = Depends(require_onboarded), database: AsyncDatabase 
     return {"requests": await _serialize_many(database, reqs, user)}
 
 
+async def _active_claims(database: AsyncDatabase, helper_id: ObjectId) -> int:
+    return await database.requests.count_documents({"helper_id": helper_id, "status": RequestStatus.CLAIMED})
+
+
 @router.get("/ranked")
 async def ranked(user: dict = Depends(require_role(Role.helper)), database: AsyncDatabase = Depends(get_database)) -> dict:
-    results = await ranking.rank_open_requests(database, user)
-    return {
-        # A user holding both profiles must not be offered their own request to claim.
-        "requests": [serialize_request(r, user, score=score) for r, score in results if r["requester_id"] != user["_id"]],
+    """OPEN requests for this volunteer: hard filters, then fit + proximity + need (services/matching.py)."""
+    active = await _active_claims(database, user["_id"])
+    base = {
         "vector_search": ranking.mode(),
         "profile_embedded": bool(user.get("embedding")),
+        "home_set": bool(user.get("home_location")),
+        "radius_km": matching.effective_radius_km(user),
+        "active_claims": active,
+        "claim_limit": matching.MAX_ACTIVE_CLAIMS,
+        "weights_note": priority.WEIGHTS_NOTE,
     }
+    if active >= matching.MAX_ACTIVE_CLAIMS:
+        return base | {"requests": [], "claim_limit_reached": True}
+    # Fetch a wide slate by similarity, then filter and re-rank with the blend.
+    candidates = await ranking.rank_open_requests(database, user, limit=100)
+    weights = await priority.load_weights(database)
+    results = matching.rank(candidates, user, datetime.now(UTC), weights)
+    requests = []
+    for req, scored, similarity in results:
+        out = serialize_request(req, user, score=similarity)
+        out |= {
+            "match_score": scored["match_score"],
+            "distance_km": scored["distance_km"],
+            "breakdown": scored["breakdown"],
+        }
+        requests.append(out)
+    return base | {"requests": requests, "claim_limit_reached": False}
 
 
 @router.get("/{request_id}")
@@ -232,6 +257,8 @@ async def get_one(request_id: str, user: dict = Depends(require_onboarded), data
 @router.post("/{request_id}/claim")
 async def claim(request_id: str, user: dict = Depends(require_role(Role.helper)), database: AsyncDatabase = Depends(get_database)) -> dict:
     oid = parse_object_id(request_id)
+    if await _active_claims(database, user["_id"]) >= matching.MAX_ACTIVE_CLAIMS:
+        raise _claim_limit()
     now = datetime.now(UTC)
     req = await database.requests.find_one_and_update(
         # The requester_id guard keeps the check atomic with the claim itself.
@@ -249,7 +276,30 @@ async def claim(request_id: str, user: dict = Depends(require_role(Role.helper))
                 raise APIError(409, "OWN_REQUEST", "You can't pick up your own request")
             raise APIError(409, "ALREADY_CLAIMED", "Someone else already picked this request")
         raise APIError(404, "NOT_FOUND", "Request not found")
+    # Two claims racing past the check above could both land; undo this one if the cap is now exceeded.
+    if await _active_claims(database, user["_id"]) > matching.MAX_ACTIVE_CLAIMS:
+        await database.requests.update_one(
+            {"_id": oid, "status": RequestStatus.CLAIMED, "helper_id": user["_id"]},
+            {"$set": {"status": RequestStatus.OPEN, "helper_id": None, "updated_at": datetime.now(UTC)},
+             "$unset": {"claimed_at": ""}, "$pop": {"timeline": 1}},
+        )
+        raise _claim_limit()
+    await _store_priority(database, req)
     return {"request": await _serialize_one(database, req, user)}
+
+
+def _claim_limit() -> APIError:
+    return APIError(
+        409, "CLAIM_LIMIT", f"You're already helping with {matching.MAX_ACTIVE_CLAIMS} requests. Finish or release one first."
+    )
+
+
+async def _store_priority(database: AsyncDatabase, req: dict) -> None:
+    """Persist priority on status changes (PLAN.md §9.4); the feed still recomputes it at read time."""
+    if "created_at" not in req:
+        return
+    score, breakdown = matching.request_priority(req, datetime.now(UTC), await priority.load_weights(database))
+    await database.requests.update_one({"_id": req["_id"]}, {"$set": {"priority": score, "priority_breakdown": breakdown}})
 
 
 @router.post("/{request_id}/release")

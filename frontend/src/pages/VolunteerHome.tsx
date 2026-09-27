@@ -8,12 +8,11 @@ import { Button, ErrorText, Loading } from '../components/ui'
 import { stagger } from '../lib/motion'
 import { useMediaQuery } from '../lib/useMediaQuery'
 import { timeAgo } from '../lib/labels'
-import type { HelpRequest } from '../lib/types'
+import type { RankedRequest } from '../lib/types'
 
-/** Match strength as a filled green bar. Scores are (1 + cosine) / 2 from the backend; stretch the useful range. */
-function MatchBar({ score }: { score?: number }) {
-  if (score === undefined) return <div className="w-2 shrink-0 rounded-full bg-line" aria-hidden />
-  const strength = Math.min(1, Math.max(0.08, (score - 0.5) * 2.5))
+/** Blended match score (fit + distance + need, 0-1) as a filled green bar. */
+function MatchBar({ score }: { score: number }) {
+  const strength = Math.min(1, Math.max(0.08, score))
   return (
     <div className="relative w-2 shrink-0 overflow-hidden rounded-full bg-brand-soft" aria-hidden>
       <div className="animate-grow absolute inset-x-0 bottom-0 origin-bottom rounded-full bg-brand" style={{ height: `${strength * 100}%` }} />
@@ -29,7 +28,7 @@ function RankedItem({
   onClaim,
   busy,
 }: {
-  request: HelpRequest
+  request: RankedRequest
   rank: number
   selected: boolean
   onSelect: () => void
@@ -47,10 +46,12 @@ function RankedItem({
       className={`animate-rise stagger flex cursor-pointer gap-4 rounded-xl bg-surface p-4 ${selected ? 'ring-2 ring-emerald-600' : ''}`}
       style={stagger(rank - 1)}
     >
-      <MatchBar score={request.score} />
+      <MatchBar score={request.match_score} />
       <div className="min-w-0 flex-1">
         <p className="text-sm text-ink-soft">
-          {rank === 1 && request.score !== undefined ? 'Best fit for your profile, ' : ''}posted {timeAgo(request.created_at)}
+          {rank === 1 ? 'Top match, ' : ''}
+          {request.distance_km !== null ? `about ${request.distance_km < 1 ? 'under 1' : Math.round(request.distance_km)} km away, ` : ''}
+          posted {timeAgo(request.created_at)}
           {request.language !== 'en' && ` (${request.language})`}
         </p>
         {!request.display_location && <p className="mt-1 text-sm text-ink-soft">No location shared, so it isn't on the map.</p>}
@@ -147,7 +148,7 @@ export default function VolunteerHome() {
       <section>
         <h1 className="text-3xl font-extrabold">Requests that fit you</h1>
         <p className="mt-2 text-ink-soft">
-          Ranked by how closely each request matches the skills and offer in your profile. The list refreshes on its own.{' '}
+          Ranked by how well each request fits your skills, how close it is, and how urgent it is. The list refreshes on its own.{' '}
           <Link to="/profile" className="font-semibold text-ink underline underline-offset-4">
             Edit your skills
           </Link>
@@ -160,6 +161,15 @@ export default function VolunteerHome() {
             </Link>{' '}
             so the map centers on you and we can find requests near you.
           </p>
+        )}
+
+        {ranked.data?.claim_limit_reached && (
+          <p role="status" className="mt-4 rounded-lg bg-brand-soft p-3">
+            You're helping with {ranked.data.active_claims} requests, the most at once. Finish or release one to see new requests.
+          </p>
+        )}
+        {ranked.data && ranked.data.home_set && !ranked.data.claim_limit_reached && (
+          <p className="mt-4 text-sm text-ink-soft">Showing requests within {ranked.data.radius_km} km of your home.</p>
         )}
 
         {alreadyTaken && <p role="status" className="mt-4 rounded-lg bg-brand-soft p-3">Another volunteer just picked that one. Here's the updated list.</p>}
@@ -180,7 +190,7 @@ export default function VolunteerHome() {
             {unmapped} of {count} {count === 1 ? 'request' : 'requests'} didn't include a location, so {unmapped === 1 ? 'it is' : 'they are'} listed but not on the map.
           </p>
         )}
-        {ranked.data?.requests.length === 0 && (
+        {ranked.data?.requests.length === 0 && !ranked.data.claim_limit_reached && (
           <p className="mt-6 rounded-xl bg-surface p-5 text-ink-soft">
             No open requests right now. New ones will show up here automatically.
           </p>
