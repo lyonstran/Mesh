@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 
 from bson import ObjectId
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends
 from pymongo import ReturnDocument
 from pymongo.asynchronous.database import AsyncDatabase
 
@@ -9,7 +9,7 @@ from app.deps import get_database, parse_object_id, require_onboarded, require_r
 from app.errors import APIError
 from app.models import ACTIVE_STATUSES, RequestCreate, RequestStatus, Role, TextIn
 from app.services import ranking
-from app.services.embeddings import embed_for_matching
+from app.services.indexing import refresh_request_embedding
 from app.services.rules import is_emergency
 from app.services.serialize import relation, serialize_request
 from app.services.state import Actor, check_transition
@@ -81,13 +81,15 @@ async def check(body: TextIn, _: dict = Depends(require_role(Role.requester))) -
 
 @router.post("")
 async def create(
-    body: RequestCreate, user: dict = Depends(require_role(Role.requester)), database: AsyncDatabase = Depends(get_database)
+    body: RequestCreate,
+    background: BackgroundTasks,
+    user: dict = Depends(require_role(Role.requester)),
+    database: AsyncDatabase = Depends(get_database),
 ) -> dict:
     active = await database.requests.find_one({"requester_id": user["_id"], "status": {"$in": list(ACTIVE_STATUSES)}})
     if active:
         raise APIError(409, "ACTIVE_REQUEST_EXISTS", "You already have an active request")
     emergency = is_emergency(body.text)
-    embed_text, vector = await embed_for_matching(body.text, "request")
     now = datetime.now(UTC)
     doc = {
         "requester_id": user["_id"],
@@ -96,13 +98,14 @@ async def create(
         "emergency": emergency,
         "status": RequestStatus.OPEN,
         "helper_id": None,
-        "embed_text": embed_text,
-        "embedding": vector,
+        "embed_text": None,  # filled in after the response by refresh_request_embedding
+        "embedding": None,
         "timeline": [{"status": RequestStatus.OPEN, "at": now, "by": user["_id"]}],
         "created_at": now,
         "updated_at": now,
     }
     doc["_id"] = (await database.requests.insert_one(doc)).inserted_id
+    background.add_task(refresh_request_embedding, database, doc["_id"], body.text)
     return {"request": await _serialize_one(database, doc, user), "show_911": emergency}
 
 

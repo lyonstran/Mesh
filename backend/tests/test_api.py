@@ -168,3 +168,47 @@ def test_custom_skill_validation_error_shape(env):
     resp = env.client.patch("/api/me", json={"helper": {"custom_skills": ["x" * 41]}}, headers=headers)
     assert resp.status_code == 422
     assert resp.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_profile_save_only_rematches_when_matching_text_changes(env):
+    headers = env.onboard_helper("Sam", "I can deliver water")
+    before = env.raw.users.find_one({"name": "Sam"})["embedding"]
+
+    resp = env.client.patch("/api/me", json={"name": "Sam R.", "language": "es"}, headers=headers).json()
+    assert resp["rematching"] is False
+    assert env.raw.users.find_one({"_id": env.raw.users.find_one({"name": "Sam R."})["_id"]})["embedding"] == before
+
+    body = {"helper": {"skills": [], "custom_skills": ["Tree climbing"], "resources": [], "about": "I can deliver water"}}
+    resp = env.client.patch("/api/me", json=body, headers=headers).json()
+    assert resp["rematching"] is True
+    after = env.raw.users.find_one({"name": "Sam R."})
+    assert after["embedding"] != before and "Tree climbing" in after["profile_text"]
+
+
+def test_new_request_is_embedded_after_response(env):
+    created, _ = _create_request(env, "Need water")
+    doc = env.raw.requests.find_one({"text": "Need water"})
+    # TestClient runs background tasks before returning, so the embedding is already there.
+    assert doc["embedding"] and len(doc["embedding"]) == 384
+    assert created["request"]["id"] == str(doc["_id"])
+
+
+def test_stale_background_embedding_does_not_overwrite_newer_profile(env):
+    import asyncio
+    import os
+
+    from pymongo import AsyncMongoClient
+
+    from app.services.indexing import refresh_helper_embedding
+
+    user, _ = env.make_user(Role.helper, "Racer", profile_text="newer text", embedding=[1.0] * 384)
+
+    async def run_stale_job():
+        client = AsyncMongoClient(os.environ["MONGODB_TEST_URI"])
+        try:
+            await refresh_helper_embedding(client[env.raw.name], user["_id"], "older text")
+        finally:
+            await client.close()
+
+    asyncio.run(run_stale_job())
+    assert env.raw.users.find_one({"_id": user["_id"]})["embedding"] == [1.0] * 384

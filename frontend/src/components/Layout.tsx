@@ -28,14 +28,14 @@ export default function Layout() {
                 </span>
               )}
               {user.role && (
-                <Link to="/profile" className="flex min-h-10 items-center rounded-md px-2 font-semibold underline-offset-4 hover:underline">
+                <Link to="/profile" className="flex min-h-10 items-center rounded-md px-2 font-semibold whitespace-nowrap underline-offset-4 hover:underline">
                   Profile
                 </Link>
               )}
               <button
                 type="button"
                 onClick={() => logout.mutate()}
-                className="min-h-10 rounded-md px-2 font-semibold text-white underline-offset-4 hover:underline"
+                className="min-h-10 rounded-md px-2 font-semibold whitespace-nowrap text-white underline-offset-4 hover:underline"
               >
                 Sign out
               </button>

@@ -78,8 +78,11 @@ export function useUpdateProfile() {
     mutationFn: (body: ProfileUpdate) => api<MeResponse>('/api/me', { method: 'PATCH', json: body }),
     onSuccess: (data) => {
       qc.setQueryData(keys.me, data)
-      // A volunteer's profile is re-embedded on save, so their ranking changes.
-      qc.invalidateQueries({ queryKey: keys.ranked })
+      // The profile is re-embedded in the background; Muse Spark takes ~5-20 s. Refresh the ranking as it lands
+      // (the ranked list also polls every 10 s on the volunteer page).
+      if (data.rematching) {
+        for (const delay of [10_000, 25_000]) setTimeout(() => qc.invalidateQueries({ queryKey: keys.ranked }), delay)
+      }
     },
   })
 }

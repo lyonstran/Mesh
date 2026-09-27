@@ -77,6 +77,7 @@ export interface User {
 export interface MeResponse {
   user: User
   needs_onboarding: boolean
+  rematching?: boolean // PATCH /api/me: true while the volunteer's matches are being refreshed in the background
 }
 
 export interface OnboardingBody {

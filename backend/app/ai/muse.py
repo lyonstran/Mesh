@@ -8,7 +8,10 @@ import httpx
 from app.ai.provider import LLMError
 from app.config import Settings
 
-_TIMEOUT = httpx.Timeout(8.0)
+# Spark responses measured 4.5-8.1 s (2026-09-26), so the usual 8 s external-HTTP timeout made
+# many calls fail. LLM calls run in background tasks (app/services/indexing.py), so a longer read
+# timeout doesn't block users; connecting still fails fast.
+_TIMEOUT = httpx.Timeout(25.0, connect=8.0)
 
 
 class MuseProvider:
@@ -39,4 +42,4 @@ class MuseProvider:
                     last_error = e
                     if isinstance(e, httpx.HTTPStatusError):
                         break  # 4xx won't succeed on retry
-        raise LLMError(f"Muse request failed: {last_error}")
+        raise LLMError(f"Muse request failed: {type(last_error).__name__}: {last_error}")

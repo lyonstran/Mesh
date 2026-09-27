@@ -81,6 +81,7 @@ Location, fuzzing, and maps; hazards and simulation; EJI and tracts; triage cate
    - When Atlas Search isn't available (local Mongo, tests), the backend computes cosine similarity in Python instead.
    - `VECTOR_SEARCH=auto|atlas|local` controls this, and `/api/health` reports which mode is active.
 5. **Scores come from code.** The LLM only rewrites text; it never produces a score or a rank.
+6. **Embedding runs after the response.** Spark normalization takes about 5–20 s, so saving a profile or creating a request returns immediately and a background task writes the vector (`services/indexing.py`); ranking catches up when it lands. A background write is skipped if the profile changed again in the meantime, and saves that don't change the matching text skip Spark entirely.
 
 ### MVP endpoints
 | Method | Path | Who | Notes |
