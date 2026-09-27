@@ -1,26 +1,45 @@
+# Production stack: the API, and Caddy serving the built frontend over HTTPS. See docs/DEPLOY.md.
+# Only Caddy is reachable from outside; the backend has no published port.
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   backend:
     build: ./backend
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     env_file: .env
     volumes:
-      - ./backend/media:/app/media
+      - media:/app/media
     restart: unless-stopped
+    logging: *logging
 
   caddy:
-    image: caddy:2
+    build:
+      context: .
+      dockerfile: deploy/Caddy.Dockerfile
+      args:
+        VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID:-}
+        VITE_DEMO_LOGIN: ${VITE_DEMO_LOGIN:-false}
+        VITE_MAP_TILE_URL: ${VITE_MAP_TILE_URL:-}
+    environment:
+      SITE_DOMAIN: ${SITE_DOMAIN:-mesh-together.tech}
     ports:
       - "80:80"
       - "443:443"
+      - "443:443/udp"
     volumes:
-      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - ./frontend/dist:/srv:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     restart: unless-stopped
+    logging: *logging
 
 volumes:
   caddy_data:
   caddy_config:
+  media:

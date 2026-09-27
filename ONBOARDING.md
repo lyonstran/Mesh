@@ -104,7 +104,7 @@ Same four lanes and branches. Each lane's tasks are **in order**: finish and mer
 | **D: AI & data** | Muse Spark, AI matching v2, matching eval, synthetic leads | Teammate 3 |
 
 **Lane A: Platform** (`lane/a-platform`)
-1. **A1 Deploy:** Vultr VM, Docker Compose, Caddy, .tech DNS, HTTPS (PLAN.md §16). Pre-download the embedding model in the Docker image, set `COOKIE_SECURE=true`, and add the production origin to the OAuth client. Then run the phone smoke test over cellular.
+1. **A1 Deploy:** Vultr VM, Docker Compose, Caddy, .tech DNS, HTTPS (PLAN.md §16). The repo side is done: the embedding model is baked into the image, the frontend builds inside Docker, and `docs/DEPLOY.md` is the runbook (`deploy/bootstrap-vm.sh`, `deploy/deploy.sh`, and a clean production `.env` template). What's left is yours: create the VM, add the DNS records, allow the VM's IP in Atlas, add the production origin to the OAuth client, fill in `.env` on the VM, and run the phone smoke test over cellular.
 2. **A2 Realtime:** `/ws` for chat messages and request status (PLAN.md §10), keeping polling as a fallback. Every payload goes through `serialize_request`.
 3. **A3 Coordinator role:** invite-code onboarding, `POST /api/coordinator/verify/{user_id}`. Lanes B and D need verified helpers and a coordinator view.
 4. **A4 Match offers:** `match.suggested` WebSocket event with accept/decline, plus the 5-minute timeout that offers to the next candidate (PLAN.md §21.1 step 6), using D's ranked candidates.
@@ -166,6 +166,14 @@ Same four lanes and branches. Each lane's tasks are **in order**: finish and mer
   ```
 - Commit to your lane branch and push often. Never push directly to `main`.
 - **Merge into `main` via PR whenever a task works**, and at the latest at every sync point. Before merging: `pytest -q` and `npm run typecheck` pass, and one teammate glances at it (a 2-minute review is fine).
+
+  **Run the database tests too** (they skip silently without a database, and that hides the location privacy tests). With Docker Desktop running:
+  ```bash
+  docker run -d --name mesh-test-mongo -p 27018:27017 mongo:7
+  cd backend && MONGODB_TEST_URI=mongodb://localhost:27018 python -m pytest -q     # expect: 0 skipped
+  docker rm -f mesh-test-mongo                                                       # when done
+  ```
+  (PowerShell: `$env:MONGODB_TEST_URI='mongodb://localhost:27018'`.) The tests create and drop their own scratch databases; nothing touches Atlas.
 - After anything merges to `main`, update your lane branch: `git pull origin main` (or `git rebase origin/main` if you prefer). Lane branches that drift from `main` for hours cause painful merges.
 
 ### Shared files (where conflicts happen)
